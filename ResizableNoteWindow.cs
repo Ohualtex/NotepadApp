@@ -18,6 +18,12 @@ internal class ResizableNoteWindow : Form
         Padding = new Padding(5);
     }
 
+    protected override void OnHandleCreated(EventArgs args)
+    {
+        base.OnHandleCreated(args);
+        if (ShowInTaskbar) TaskbarAppearance.Apply(Handle);
+    }
+
     protected override CreateParams CreateParams
     {
         get
