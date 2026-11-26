@@ -1,0 +1,95 @@
+name: Package Windows app
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    outputs:
+      package-name: ${{ steps.zip.outputs.name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build and verify Windows ZIP
+        id: zip
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          $name = 'NotepadApp-win-x64'
+          if ($env:EVENT_NAME -eq 'release') {
+              if ($env:REF_NAME -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+                  throw 'Expected a vMAJOR.MINOR.PATCH release tag.'
+              }
+              $name = "NotepadApp-$env:REF_NAME-win-x64"
+          }
+          $publish = Join-Path $env:RUNNER_TEMP 'notepadapp-publish'
+          dotnet publish NotepadApp.csproj -c Release -r win-x64 --self-contained true -p:DebugType=None -o $publish
+          if ($LASTEXITCODE -ne 0) { throw 'Windows publish failed.' }
+
+          $zip = Join-Path $env:RUNNER_TEMP "$name.zip"
+          Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $zip
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+              $entries = $archive.Entries.FullName
+              foreach ($file in @('NotepadApp.exe', 'coreclr.dll', 'Assets/Taskbar.ico')) {
+                  if ($file -notin $entries) { throw "Missing from ZIP: $file" }
+              }
+              if ($entries -match '(^|[/\\])(notes|settings)\.json$') {
+                  throw 'Personal notes or settings must not be packaged.'
+              }
+          }
+          finally { $archive.Dispose() }
+
+          "name=$name" >> $env:GITHUB_OUTPUT
+          "path=$zip" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.zip.outputs.name }}
+          path: ${{ steps.zip.outputs.path }}
+          if-no-files-found: error
+          compression-level: 0
+
+  attach:
+    if: github.event_name == 'release'
+    needs: package
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.package.outputs.package-name }}
+          path: release-assets
+
+      - name: Attach ZIP to published release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          PACKAGE_NAME: ${{ needs.package.outputs.package-name }}
+        run: |
+          $asset = "$env:PACKAGE_NAME.zip"
+          $existing = gh release view $env:RELEASE_TAG --repo $env:REPOSITORY --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not inspect GitHub release.' }
+          if ($asset -in $existing) {
+              Write-Host "$asset is already attached."
+              exit 0
+          }
+          gh release upload $env:RELEASE_TAG (Join-Path 'release-assets' $asset) --repo $env:REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Could not attach Windows ZIP.' }
