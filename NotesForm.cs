@@ -10,7 +10,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private NotesTheme theme = NotesTheme.Resolve(ThemePreference.Light);
     private readonly Control workspace;
     private readonly NotesSettingsView settings;
-    private readonly NoteButton settingsButton = new() { Text = "⚙", AccessibleName = "Settings", Dock = DockStyle.Fill };
+    private readonly NoteButton settingsButton = new() { AccessibleName = "Settings", Dock = DockStyle.Fill };
     private readonly NoteButton closeButton = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
     private readonly Font windowIconFont = new("Segoe UI Symbol", 15);
     private readonly TableLayoutPanel searchRow = new() { Height = 38, Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(7, 4, 7, 4) };
@@ -71,6 +71,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         Controls.Add(workspace);
         Controls.Add(settings);
         ConfigureCaption(settings.Caption);
+        settingsButton.PaintIcon = PaintSettingsIcon;
         settingsButton.Click += (_, _) => ShowSettings();
         closeButton.Click += (_, _) => Close();
         LoadPreferences();
@@ -166,6 +167,41 @@ internal sealed class NotesForm : ResizableNoteWindow
 
         return base.ProcessCmdKey(ref message, keyData);
     }
+
+    private void PaintSettingsIcon(Graphics graphics, Color ink)
+    {
+        float scale = settingsButton.DeviceDpi / 96f;
+        float centerX = (settingsButton.ClientSize.Width - 1) / 2f;
+        float centerY = (settingsButton.ClientSize.Height - 1) / 2f;
+        const int teeth = 8;
+        var outline = new PointF[teeth * 4];
+
+        for (int tooth = 0; tooth < teeth; tooth++)
+        {
+            float angle = tooth * 45 - 90;
+            int point = tooth * 4;
+            outline[point] = At(angle - 15, 7);
+            outline[point + 1] = At(angle - 10, 9.4f);
+            outline[point + 2] = At(angle + 10, 9.4f);
+            outline[point + 3] = At(angle + 15, 7);
+        }
+
+        SmoothingMode smoothing = graphics.SmoothingMode;
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(ink, 1.3f * scale) { LineJoin = LineJoin.Round };
+        graphics.DrawPolygon(pen, outline);
+        float opening = 3.3f * scale;
+        graphics.DrawEllipse(pen, centerX - opening, centerY - opening, opening * 2, opening * 2);
+        graphics.SmoothingMode = smoothing;
+
+        PointF At(float degrees, float radius)
+        {
+            float radians = degrees * MathF.PI / 180;
+            return new PointF(centerX + MathF.Cos(radians) * radius * scale,
+                centerY + MathF.Sin(radians) * radius * scale);
+        }
+    }
+
 
     private Control BuildWorkspace()
     {
