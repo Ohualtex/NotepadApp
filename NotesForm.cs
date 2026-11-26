@@ -11,8 +11,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private readonly Control workspace;
     private readonly NotesSettingsView settings;
     private readonly NoteButton settingsButton = new() { AccessibleName = "Settings", Dock = DockStyle.Fill };
-    private readonly NoteButton closeButton = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
-    private readonly Font windowIconFont = new("Segoe UI Symbol", 15);
+    private readonly NoteButton closeButton = new() { AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
     private readonly TableLayoutPanel searchRow = new() { Height = 38, Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(7, 4, 7, 4) };
     private readonly Label searchHint = new() { Text = "Search notes", Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft };
     private readonly Font listHeading = new("Segoe UI", 14, FontStyle.Bold);
@@ -31,7 +30,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         DisplayMember = nameof(Note.DisplayTitle),
         AccessibleName = "Notes"
     };
-    private readonly NoteButton add = new() { Text = "+", AccessibleName = "New note", Dock = DockStyle.Fill };
+    private readonly NoteButton add = new() { AccessibleName = "New note", Dock = DockStyle.Fill };
     private readonly NoteButton save = new() { Text = "Save all", AutoSize = true };
     private readonly NoteButton reload = new() { Text = "Reload", AutoSize = true };
     private readonly TextBox search = new()
@@ -71,7 +70,10 @@ internal sealed class NotesForm : ResizableNoteWindow
         Controls.Add(workspace);
         Controls.Add(settings);
         ConfigureCaption(settings.Caption);
-        settingsButton.PaintIcon = PaintSettingsIcon;
+        add.SetCenteredIcon(NoteButtonIcons.Add);
+        settingsButton.SetCenteredIcon(PaintSettingsIcon);
+        closeButton.SetCenteredIcon(NoteButtonIcons.Close);
+        clearSearch.SetCenteredIcon(NoteButtonIcons.Close);
         settingsButton.Click += (_, _) => ShowSettings();
         closeButton.Click += (_, _) => Close();
         LoadPreferences();
@@ -110,7 +112,6 @@ internal sealed class NotesForm : ResizableNoteWindow
         {
             SystemEvents.UserPreferenceChanged -= SystemPreferenceChanged;
             autoSave.Dispose();
-            windowIconFont.Dispose();
             listHeading.Dispose();
             cardTitle.Dispose();
             previewRenderer.Dispose();
@@ -168,11 +169,8 @@ internal sealed class NotesForm : ResizableNoteWindow
         return base.ProcessCmdKey(ref message, keyData);
     }
 
-    private void PaintSettingsIcon(Graphics graphics, Color ink)
+    private static void PaintSettingsIcon(Graphics graphics, Color ink)
     {
-        float scale = settingsButton.DeviceDpi / 96f;
-        float centerX = (settingsButton.ClientSize.Width - 1) / 2f;
-        float centerY = (settingsButton.ClientSize.Height - 1) / 2f;
         const int teeth = 8;
         var outline = new PointF[teeth * 4];
 
@@ -186,19 +184,15 @@ internal sealed class NotesForm : ResizableNoteWindow
             outline[point + 3] = At(angle + 15, 7);
         }
 
-        SmoothingMode smoothing = graphics.SmoothingMode;
-        graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var pen = new Pen(ink, 1.3f * scale) { LineJoin = LineJoin.Round };
+        using var pen = new Pen(ink, 1.3f) { LineJoin = LineJoin.Round };
         graphics.DrawPolygon(pen, outline);
-        float opening = 3.3f * scale;
-        graphics.DrawEllipse(pen, centerX - opening, centerY - opening, opening * 2, opening * 2);
-        graphics.SmoothingMode = smoothing;
+        const float opening = 3.3f;
+        graphics.DrawEllipse(pen, -opening, -opening, opening * 2, opening * 2);
 
-        PointF At(float degrees, float radius)
+        static PointF At(float degrees, float radius)
         {
             float radians = degrees * MathF.PI / 180;
-            return new PointF(centerX + MathF.Cos(radians) * radius * scale,
-                centerY + MathF.Sin(radians) * radius * scale);
+            return new PointF(MathF.Cos(radians) * radius, MathF.Sin(radians) * radius);
         }
     }
 
@@ -226,7 +220,6 @@ internal sealed class NotesForm : ResizableNoteWindow
         ConfigureCaption(heading);
         foreach (Button button in new[] { add, settingsButton, closeButton })
         {
-            button.Font = windowIconFont;
             button.Margin = new Padding(1);
         }
         layout.Controls.Add(header, 0, 0);

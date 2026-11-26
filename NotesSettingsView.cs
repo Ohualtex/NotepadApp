@@ -4,8 +4,8 @@ namespace NotepadApp;
 
 internal sealed class NotesSettingsView : UserControl
 {
-    private readonly NoteButton back = new() { Text = "←", AccessibleName = "Back to notes", Dock = DockStyle.Fill };
-    private readonly NoteButton close = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
+    private readonly NoteButton back = new() { AccessibleName = "Back to notes", Dock = DockStyle.Fill };
+    private readonly NoteButton close = new() { AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
     private readonly Label heading = new() { Text = "Settings", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(7, 0, 0, 0) };
     private readonly Button save;
     private readonly Button reload;
@@ -17,7 +17,6 @@ internal sealed class NotesSettingsView : UserControl
         Anchor = AnchorStyles.Right
     };
     private readonly Font headingFont = new("Segoe UI", 14, FontStyle.Bold);
-    private readonly Font headerIconFont = new("Segoe UI Symbol", 15);
     private readonly Label notice = new() { AutoSize = true, Visible = false, MaximumSize = new Size(275, 0) };
     private bool updating;
 
@@ -35,7 +34,8 @@ internal sealed class NotesSettingsView : UserControl
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
         header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         heading.Font = headingFont;
-        back.Font = close.Font = headerIconFont;
+        back.SetCenteredIcon(NoteButtonIcons.Back);
+        close.SetCenteredIcon(NoteButtonIcons.Close);
         header.Controls.Add(back, 0, 0);
         header.Controls.Add(heading, 1, 0);
         header.Controls.Add(close, 2, 0);
@@ -88,7 +88,6 @@ internal sealed class NotesSettingsView : UserControl
         Disposed += (_, _) =>
         {
             headingFont.Dispose();
-            headerIconFont.Dispose();
         };
     }
 

@@ -16,6 +16,26 @@ internal sealed class NoteButton : Button
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Action<Graphics, Color>? PaintIcon { get; set; }
 
+    internal void SetCenteredIcon(Action<Graphics, Color> draw)
+    {
+        PaintIcon = (graphics, ink) =>
+        {
+            GraphicsState state = graphics.Save();
+            try
+            {
+                float scale = DeviceDpi / 96f;
+                graphics.TranslateTransform((ClientSize.Width - 1) / 2f, (ClientSize.Height - 1) / 2f);
+                graphics.ScaleTransform(scale, scale);
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                draw(graphics, ink);
+            }
+            finally
+            {
+                graphics.Restore(state);
+            }
+        };
+    }
+
     protected override void OnPaint(PaintEventArgs args) => surface.Paint(args.Graphics, false, ShowFocusCues, PaintIcon);
 }
 
@@ -137,5 +157,39 @@ internal sealed class NoteButtonSurface
     {
         pressed = value;
         button.Invalidate();
+    }
+}
+
+internal static class NoteButtonIcons
+{
+    internal static void Add(Graphics graphics, Color ink)
+    {
+        using var pen = new Pen(ink, 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        graphics.DrawLine(pen, -10, 0, 10, 0);
+        graphics.DrawLine(pen, 0, -10, 0, 10);
+    }
+
+    internal static void Close(Graphics graphics, Color ink)
+    {
+        using var pen = new Pen(ink, 1.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        graphics.DrawLine(pen, -6.5f, -6.5f, 6.5f, 6.5f);
+        graphics.DrawLine(pen, -6.5f, 6.5f, 6.5f, -6.5f);
+    }
+
+    internal static void More(Graphics graphics, Color ink)
+    {
+        using var brush = new SolidBrush(ink);
+        for (int x = -6; x <= 6; x += 6)
+            graphics.FillEllipse(brush, x - 1.25f, -1.25f, 2.5f, 2.5f);
+    }
+
+    internal static void Back(Graphics graphics, Color ink)
+    {
+        using var pen = new Pen(ink, 1.5f)
+        {
+            StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round
+        };
+        graphics.DrawLine(pen, -8, 0, 8, 0);
+        graphics.DrawLines(pen, [new PointF(-2, -6), new PointF(-8, 0), new PointF(-2, 6)]);
     }
 }

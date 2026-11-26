@@ -31,9 +31,9 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Visible = false };
     private readonly Panel writingArea = new() { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(12, 6, 9, 4) };
     private readonly NoteOptionsPanel drawer;
-    private readonly NoteButton newNote = new() { Text = "+", AccessibleName = "New note", Dock = DockStyle.Fill };
-    private readonly NoteButton options = new() { Text = "⋯", AccessibleName = "Note options", Dock = DockStyle.Fill };
-    private readonly NoteButton close = new() { Text = "×", AccessibleName = "Close note", Dock = DockStyle.Fill };
+    private readonly NoteButton newNote = new() { AccessibleName = "New note", Dock = DockStyle.Fill };
+    private readonly NoteButton options = new() { AccessibleName = "Note options", Dock = DockStyle.Fill };
+    private readonly NoteButton close = new() { AccessibleName = "Close note", Dock = DockStyle.Fill };
     private readonly ToolTip formatToolTip = new();
     private readonly Dictionary<FontStyle, CheckBox> styleButtons = [];
     private readonly NoteToggleButton bullets = CreateFormatButton("", "Bulleted list");
@@ -433,6 +433,9 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         var titleArea = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 8, 4, 0), Margin = Padding.Empty };
         titleArea.Controls.Add(titleCaption);
         titleArea.Controls.Add(title);
+        newNote.SetCenteredIcon(NoteButtonIcons.Add);
+        options.SetCenteredIcon(NoteButtonIcons.More);
+        close.SetCenteredIcon(NoteButtonIcons.Close);
         header.Controls.Add(newNote, 0, 0);
         header.Controls.Add(titleArea, 1, 0);
         header.Controls.Add(options, 2, 0);
