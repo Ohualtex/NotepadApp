@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace NotepadApp;
 
 internal sealed class NoteEditorForm : Form
@@ -26,6 +28,7 @@ internal sealed class NoteEditorForm : Form
     private readonly ToolTip formatToolTip = new();
     private readonly Dictionary<FontStyle, CheckBox> styleButtons = [];
     private readonly CheckBox bullets = CreateFormatButton("• List", "Bulleted list");
+    private readonly Button insertImage = new() { Text = "Image", AccessibleName = "Insert image", AutoSize = true };
     private readonly FlowLayoutPanel formatTools = new() { Dock = DockStyle.Fill, AutoSize = true };
     private readonly Button export = new() { Text = "Export .txt", AutoSize = true };
 
@@ -55,12 +58,19 @@ internal sealed class NoteEditorForm : Form
             UpdateDates(note);
         }
 
-        void UpdateContent() => UpdateNote(content.Text, content.TextLength > 0 ? content.Rtf : null);
+        void UpdateContent()
+        {
+            string? richText = content.Rtf;
+            bool hasImage = NoteImage.ContainsPicture(richText);
+            string plainText = GetPlainContent(hasImage);
+            UpdateNote(plainText, plainText.Length > 0 || hasImage ? richText : null);
+        }
 
         title.TextChanged += (_, _) => UpdateNote(note.Content, note.RichText);
         content.TextChanged += (_, _) => UpdateContent();
         content.SelectionChanged += (_, _) => UpdateFormatState();
         ConfigureFormatTools(UpdateContent);
+        insertImage.Click += (_, _) => ChooseImage(UpdateContent);
         save.Click += (_, _) => saveNotes();
         ConfigureNoteMenu(note, deleteNote, changeAccent);
         options.Click += (_, _) => noteMenu.Show(options, Point.Empty, ToolStripDropDownDirection.AboveRight);
@@ -79,7 +89,8 @@ internal sealed class NoteEditorForm : Form
             try
             {
                 content.Rtf = note.RichText;
-                if (content.Text.ReplaceLineEndings("\n") == note.Content.ReplaceLineEndings("\n")) return;
+                string plainText = GetPlainContent(NoteImage.ContainsPicture(note.RichText));
+                if (plainText.ReplaceLineEndings("\n") == note.Content.ReplaceLineEndings("\n")) return;
             }
             catch (ArgumentException)
             {
@@ -88,6 +99,43 @@ internal sealed class NoteEditorForm : Form
         }
 
         content.Text = note.Content;
+    }
+
+    private string GetPlainContent(bool hasImage)
+    {
+        // Rich Edit represents each inline image as a space when it returns plain text.
+        string text = content.Text;
+        return hasImage && string.IsNullOrWhiteSpace(text) ? "" : text;
+    }
+
+    private void ChooseImage(Action updateContent)
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Insert image",
+            Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif"
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            using var file = dialog.OpenFile();
+            InsertImage(file);
+            updateContent();
+            UpdateFormatState();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or ExternalException or OutOfMemoryException)
+        {
+            SetStatus($"Could not insert image. {error.Message}");
+        }
+    }
+
+    private void InsertImage(Stream image)
+    {
+        var available = new Size(Math.Max(1, content.ClientSize.Width - 16), Math.Max(1, content.ClientSize.Height - 16));
+        string picture = NoteImage.CreateRtf(image, available, content.DeviceDpi);
+        content.Focus();
+        content.SelectedRtf = picture;
     }
 
     private static CheckBox CreateFormatButton(string label, string accessibleName) => new()
@@ -139,6 +187,9 @@ internal sealed class NoteEditorForm : Form
             formatToolTip.SetToolTip(button, button.AccessibleName);
         }
 
+        NotesForm.StyleButton(insertImage);
+        formatToolTip.SetToolTip(insertImage, "Insert image");
+        formatTools.Controls.Add(insertImage);
         UpdateFormatState();
     }
 

@@ -169,7 +169,8 @@ internal sealed class NotesForm : Form
         const TextFormatFlags singleLine = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
         DrawSearchText(args.Graphics, NoteSearch.GetSnippet(note.DisplayTitle, searchQuery, 110),
             new Rectangle(text.Left, text.Top, Math.Max(0, text.Width - 24), line), ForeColor, singleLine: true);
-        DrawSearchText(args.Graphics, NoteSearch.GetSnippet(note.Content, searchQuery, 220),
+        string preview = note.Content.Length == 0 && NoteImage.ContainsPicture(note.RichText) ? "Image" : note.Content;
+        DrawSearchText(args.Graphics, NoteSearch.GetSnippet(preview, searchQuery, 220),
             new Rectangle(text.Left, text.Top + line + 2, text.Width, line * 2), Color.Gainsboro, singleLine: false);
         TextRenderer.DrawText(args.Graphics, note.UpdatedAt.LocalDateTime.ToString("d"), Font,
             new Rectangle(text.Left, text.Bottom - line, text.Width, line), Color.Silver, singleLine | TextFormatFlags.Right);
