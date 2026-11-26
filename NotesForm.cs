@@ -20,11 +20,23 @@ internal sealed class NotesForm : Form
     private readonly Button add = new() { Text = "+ New note", AutoSize = true };
     private readonly Button save = new() { Text = "Save all", AutoSize = true };
     private readonly Button reload = new() { Text = "Reload", AutoSize = true };
+    private readonly TextBox search = new()
+    {
+        Dock = DockStyle.Fill,
+        PlaceholderText = "Search notes",
+        AccessibleName = "Search notes",
+        BorderStyle = BorderStyle.FixedSingle,
+        BackColor = Color.FromArgb(37, 41, 48),
+        ForeColor = Color.WhiteSmoke
+    };
+    private readonly Button clearSearch = new() { Text = "×", AccessibleName = "Clear search", AutoSize = true, Enabled = false };
+    private readonly Label noResults = new() { Text = "No matching notes.", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Visible = false };
     private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(0, 8, 0, 0) };
     private List<Note> notes = [];
     private bool dirty;
     private bool storageReady;
     private bool closingEditors;
+    private string searchQuery = "";
 
     public NotesForm(NoteStore store)
     {
@@ -52,6 +64,17 @@ internal sealed class NotesForm : Form
             args.SuppressKeyPress = true;
             OpenEditor(note);
         };
+        search.TextChanged += (_, _) =>
+        {
+            searchQuery = search.Text.Trim();
+            clearSearch.Enabled = search.TextLength > 0;
+            RefreshList(noteList.SelectedItem as Note, resetScroll: true);
+        };
+        clearSearch.Click += (_, _) =>
+        {
+            search.Clear();
+            search.Focus();
+        };
         add.Click += (_, _) => AddNote();
         save.Click += (_, _) => SaveNotes();
         reload.Click += (_, _) =>
@@ -63,10 +86,29 @@ internal sealed class NotesForm : Form
         LoadNotes();
     }
 
+    protected override bool ProcessCmdKey(ref Message message, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.F))
+        {
+            search.Focus();
+            search.SelectAll();
+            return true;
+        }
+
+        if (keyData == Keys.Escape && search.Focused && search.TextLength > 0)
+        {
+            search.Clear();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref message, keyData);
+    }
+
     private Control BuildWorkspace()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(14) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(14) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -78,8 +120,20 @@ internal sealed class NotesForm : Form
         foreach (Button button in actions.Controls) StyleButton(button);
         layout.Controls.Add(heading, 0, 0);
         layout.Controls.Add(actions, 0, 1);
-        layout.Controls.Add(noteList, 0, 2);
-        layout.Controls.Add(status, 0, 3);
+        var searchRow = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 0, 0, 8) };
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        StyleButton(clearSearch);
+        clearSearch.Padding = new Padding(4, 0, 4, 0);
+        searchRow.Controls.Add(search, 0, 0);
+        searchRow.Controls.Add(clearSearch, 1, 0);
+        layout.Controls.Add(searchRow, 0, 2);
+
+        var results = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        results.Controls.Add(noteList);
+        results.Controls.Add(noResults);
+        layout.Controls.Add(results, 0, 3);
+        layout.Controls.Add(status, 0, 4);
         return layout;
     }
 
@@ -110,11 +164,10 @@ internal sealed class NotesForm : Form
         Rectangle text = Rectangle.Inflate(card, -12, -8);
         int line = TextRenderer.MeasureText("Ag", Font).Height;
         const TextFormatFlags singleLine = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
-        TextRenderer.DrawText(args.Graphics, note.DisplayTitle, Font,
-            new Rectangle(text.Left, text.Top, Math.Max(0, text.Width - 24), line), ForeColor, singleLine);
-        TextRenderer.DrawText(args.Graphics, note.Content.Trim(), Font,
-            new Rectangle(text.Left, text.Top + line + 2, text.Width, line * 2), Color.Gainsboro,
-            TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        DrawSearchText(args.Graphics, NoteSearch.GetSnippet(note.DisplayTitle, searchQuery, 110),
+            new Rectangle(text.Left, text.Top, Math.Max(0, text.Width - 24), line), ForeColor, singleLine: true);
+        DrawSearchText(args.Graphics, NoteSearch.GetSnippet(note.Content, searchQuery, 220),
+            new Rectangle(text.Left, text.Top + line + 2, text.Width, line * 2), Color.Gainsboro, singleLine: false);
         TextRenderer.DrawText(args.Graphics, note.UpdatedAt.LocalDateTime.ToString("d"), Font,
             new Rectangle(text.Left, text.Bottom - line, text.Width, line), Color.Silver, singleLine | TextFormatFlags.Right);
         if (noteList.Focused && args.State.HasFlag(DrawItemState.Focus))
@@ -122,6 +175,45 @@ internal sealed class NotesForm : Form
             using var outline = new Pen(Color.FromArgb(173, 186, 228));
             args.Graphics.DrawRectangle(outline, card.Left, card.Top, card.Width - 1, card.Height - 1);
         }
+    }
+
+    private void DrawSearchText(Graphics graphics, string text, Rectangle bounds, Color foreground, bool singleLine)
+    {
+        if (text.Length == 0 || bounds.Width <= 0) return;
+
+        using var format = new StringFormat(StringFormatFlags.LineLimit | (singleLine ? StringFormatFlags.NoWrap : 0))
+        {
+            Trimming = StringTrimming.EllipsisCharacter
+        };
+
+        if (searchQuery.Length > 0)
+        {
+            List<CharacterRange> matches = [];
+            int start = 0;
+            while (start < text.Length)
+            {
+                int index = NoteSearch.Find(text, searchQuery, start, out int length);
+                if (index < 0) break;
+                matches.Add(new CharacterRange(index, length));
+                start = index + length;
+            }
+
+            using var highlight = new SolidBrush(Color.FromArgb(55, 97, 85));
+            // GDI+ accepts at most 32 measured character ranges at a time.
+            foreach (var batch in matches.Chunk(32))
+            {
+                format.SetMeasurableCharacterRanges(batch);
+                foreach (var region in graphics.MeasureCharacterRanges(text, Font, bounds, format))
+                {
+                    using var measured = region;
+                    measured.Intersect(bounds);
+                    graphics.FillRegion(highlight, measured);
+                }
+            }
+        }
+
+        using var textBrush = new SolidBrush(foreground);
+        graphics.DrawString(text, Font, textBrush, bounds, format);
     }
 
     private void LoadNotes()
@@ -143,16 +235,24 @@ internal sealed class NotesForm : Form
         }
     }
 
-    private void RefreshList(Note? selection)
+    private void RefreshList(Note? selection, bool resetScroll = false)
     {
-        int previousTop = noteList.TopIndex;
+        int previousTop = resetScroll ? 0 : noteList.TopIndex;
+        var visibleNotes = notes.Where(note => NoteSearch.Matches(note, searchQuery)).ToArray();
         noteList.BeginUpdate();
         try
         {
             noteList.Items.Clear();
-            noteList.Items.AddRange(notes.ToArray());
-            noteList.SelectedItem = selection;
-            if (noteList.Items.Count > 0) noteList.TopIndex = Math.Clamp(previousTop, 0, noteList.Items.Count - 1);
+            noteList.Items.AddRange(visibleNotes);
+            if (visibleNotes.Length > 0)
+            {
+                noteList.SelectedItem = visibleNotes.Contains(selection) ? selection : visibleNotes[0];
+                noteList.TopIndex = Math.Clamp(previousTop, 0, visibleNotes.Length - 1);
+            }
+
+            bool emptySearch = searchQuery.Length > 0 && visibleNotes.Length == 0;
+            noteList.Visible = !emptySearch;
+            noResults.Visible = emptySearch;
         }
         finally
         {
@@ -227,6 +327,7 @@ internal sealed class NotesForm : Form
 
     private void AddNote()
     {
+        search.Clear();
         DateTimeOffset now = DateTimeOffset.UtcNow;
         var note = new Note { CreatedAt = now, UpdatedAt = now };
         notes.Insert(0, note);
@@ -244,10 +345,14 @@ internal sealed class NotesForm : Form
         note.Content = content;
         DateTimeOffset now = DateTimeOffset.UtcNow;
         note.UpdatedAt = now < note.CreatedAt ? note.CreatedAt : now;
-        if (titleChanged)
+        int index = noteList.Items.IndexOf(note);
+        if ((index >= 0) != NoteSearch.Matches(note, searchQuery))
         {
-            int index = noteList.Items.IndexOf(note);
-            if (index >= 0) noteList.Items[index] = note;
+            RefreshList(noteList.SelectedItem as Note);
+        }
+        else if (titleChanged && index >= 0)
+        {
+            noteList.Items[index] = note;
         }
         noteList.Invalidate();
         SetDirty();
