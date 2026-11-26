@@ -140,7 +140,7 @@ internal sealed class NotesForm : Form
         return layout;
     }
 
-    internal static void StyleButton(Button button)
+    internal static void StyleButton(ButtonBase button)
     {
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 0;
@@ -341,12 +341,13 @@ internal sealed class NotesForm : Form
         OpenEditor(note);
     }
 
-    private void EditNote(Note note, string title, string content)
+    private void EditNote(Note note, string title, string content, string? richText)
     {
-        if (note.Title == title && note.Content == content) return;
+        if (note.Title == title && note.Content == content && note.RichText == richText) return;
         bool titleChanged = note.Title != title;
         note.Title = title;
         note.Content = content;
+        note.RichText = richText;
         DateTimeOffset now = DateTimeOffset.UtcNow;
         note.UpdatedAt = now < note.CreatedAt ? note.CreatedAt : now;
         int index = noteList.Items.IndexOf(note);

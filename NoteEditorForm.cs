@@ -14,6 +14,7 @@ internal sealed class NoteEditorForm : Form
         Dock = DockStyle.Fill,
         AccessibleName = "Note content",
         DetectUrls = false,
+        HideSelection = false,
         BorderStyle = BorderStyle.None
     };
     private readonly Label dates = new() { Dock = DockStyle.Fill, AutoSize = true, ForeColor = Color.Silver };
@@ -22,9 +23,13 @@ internal sealed class NoteEditorForm : Form
     private readonly Button options = new() { Text = "Options", AccessibleName = "Note options", AutoSize = true };
     private readonly Panel accentBar = new() { Dock = DockStyle.Fill, Height = 4, Margin = new Padding(3, 0, 3, 8), AccessibleRole = AccessibleRole.None };
     private readonly ContextMenuStrip noteMenu = new();
+    private readonly ToolTip formatToolTip = new();
+    private readonly Dictionary<FontStyle, CheckBox> styleButtons = [];
+    private readonly CheckBox bullets = CreateFormatButton("• List", "Bulleted list");
+    private readonly FlowLayoutPanel formatTools = new() { Dock = DockStyle.Fill, AutoSize = true };
     private readonly Button export = new() { Text = "Export .txt", AutoSize = true };
 
-    public NoteEditorForm(Note note, Action<Note, string, string> edit, Func<bool> saveNotes,
+    public NoteEditorForm(Note note, Action<Note, string, string, string?> edit, Func<bool> saveNotes,
         Action<NoteEditorForm, Note> deleteNote, Action<NoteEditorForm, Note> exportNote, Action<Note, string> changeAccent)
     {
         Text = note.DisplayTitle;
@@ -37,25 +42,113 @@ internal sealed class NoteEditorForm : Form
         title.BackColor = content.BackColor = Color.FromArgb(41, 45, 54);
         title.ForeColor = content.ForeColor = ForeColor;
         title.Text = note.Title;
-        content.Text = note.Content;
         UpdateDates(note);
         Controls.Add(BuildWorkspace());
+        // Adding the editor to the form applies its inherited font before RTF is loaded.
+        LoadContent(note);
         ActiveControl = note.Title.Length == 0 ? title : content;
 
-        void UpdateNote()
+        void UpdateNote(string plainText, string? richText)
         {
-            edit(note, title.Text, content.Text);
+            edit(note, title.Text, plainText, richText);
             Text = note.DisplayTitle;
             UpdateDates(note);
         }
 
-        title.TextChanged += (_, _) => UpdateNote();
-        content.TextChanged += (_, _) => UpdateNote();
+        void UpdateContent() => UpdateNote(content.Text, content.TextLength > 0 ? content.Rtf : null);
+
+        title.TextChanged += (_, _) => UpdateNote(note.Content, note.RichText);
+        content.TextChanged += (_, _) => UpdateContent();
+        content.SelectionChanged += (_, _) => UpdateFormatState();
+        ConfigureFormatTools(UpdateContent);
         save.Click += (_, _) => saveNotes();
         ConfigureNoteMenu(note, deleteNote, changeAccent);
         options.Click += (_, _) => noteMenu.Show(options, Point.Empty, ToolStripDropDownDirection.AboveRight);
-        Disposed += (_, _) => noteMenu.Dispose();
+        Disposed += (_, _) =>
+        {
+            noteMenu.Dispose();
+            formatToolTip.Dispose();
+        };
         export.Click += (_, _) => exportNote(this, note);
+    }
+
+    private void LoadContent(Note note)
+    {
+        if (!string.IsNullOrEmpty(note.RichText))
+        {
+            try
+            {
+                content.Rtf = note.RichText;
+                if (content.Text.ReplaceLineEndings("\n") == note.Content.ReplaceLineEndings("\n")) return;
+            }
+            catch (ArgumentException)
+            {
+                // Plain content is still available if the optional RTF is invalid.
+            }
+        }
+
+        content.Text = note.Content;
+    }
+
+    private static CheckBox CreateFormatButton(string label, string accessibleName) => new()
+    {
+        Text = label,
+        AccessibleName = accessibleName,
+        Appearance = Appearance.Button,
+        AutoCheck = false,
+        AutoSize = true,
+        TextAlign = ContentAlignment.MiddleCenter
+    };
+
+    private void ConfigureFormatTools(Action updateContent)
+    {
+        var styles = new[] {
+            (FontStyle.Bold, "B", "Bold"), (FontStyle.Italic, "I", "Italic"),
+            (FontStyle.Underline, "U", "Underline"), (FontStyle.Strikeout, "S", "Strikethrough")
+        };
+
+        foreach (var (style, label, description) in styles)
+        {
+            var button = CreateFormatButton(label, description);
+            var font = new Font(Font, style);
+            button.Font = font;
+            button.Disposed += (_, _) => font.Dispose();
+            button.Click += (_, _) =>
+            {
+                content.Focus();
+                RichTextFormatting.ToggleStyle(content, style);
+                updateContent();
+                UpdateFormatState();
+            };
+            styleButtons.Add(style, button);
+            formatTools.Controls.Add(button);
+        }
+
+        bullets.Click += (_, _) =>
+        {
+            content.Focus();
+            content.SelectionBullet = !content.SelectionBullet;
+            updateContent();
+            UpdateFormatState();
+        };
+        formatTools.Controls.Add(bullets);
+        foreach (CheckBox button in formatTools.Controls)
+        {
+            NotesForm.StyleButton(button);
+            button.FlatAppearance.CheckedBackColor = Color.FromArgb(74, 87, 115);
+            formatToolTip.SetToolTip(button, button.AccessibleName);
+        }
+
+        UpdateFormatState();
+    }
+
+    private void UpdateFormatState()
+    {
+        FontStyle activeStyles = RichTextFormatting.GetActiveStyles(content);
+        foreach (var (style, button) in styleButtons)
+            button.Checked = (activeStyles & style) != 0;
+
+        bullets.Checked = content.SelectionBullet;
     }
 
     public NoteWindowPlacement GetWindowPlacement()
@@ -113,11 +206,12 @@ internal sealed class NoteEditorForm : Form
 
     private Control BuildWorkspace()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(12) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7, Padding = new Padding(12) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -128,9 +222,10 @@ internal sealed class NoteEditorForm : Form
         layout.Controls.Add(accentBar, 0, 0);
         layout.Controls.Add(title, 0, 1);
         layout.Controls.Add(content, 0, 2);
-        layout.Controls.Add(dates, 0, 3);
-        layout.Controls.Add(actions, 0, 4);
-        layout.Controls.Add(status, 0, 5);
+        layout.Controls.Add(formatTools, 0, 3);
+        layout.Controls.Add(dates, 0, 4);
+        layout.Controls.Add(actions, 0, 5);
+        layout.Controls.Add(status, 0, 6);
         return layout;
     }
 
@@ -141,7 +236,7 @@ internal sealed class NoteEditorForm : Form
 
     public void SetAvailability(bool storageReady, bool dirty)
     {
-        title.Enabled = content.Enabled = options.Enabled = storageReady;
+        title.Enabled = content.Enabled = options.Enabled = formatTools.Enabled = storageReady;
         save.Enabled = storageReady && dirty;
     }
 

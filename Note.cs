@@ -10,6 +10,9 @@ internal sealed class Note
     public string Title { get; set; } = "";
     [JsonRequired]
     public string Content { get; set; } = "";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RichText { get; set; }
     [JsonRequired]
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     [JsonRequired]
