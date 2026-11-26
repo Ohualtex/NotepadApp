@@ -124,7 +124,17 @@ internal sealed class NotesForm : ResizableNoteWindow
             ShowNotes();
             if (ResolveChanges() && RememberWindowPlacements(notes, this)) LoadNotes();
         };
-        FormClosing += (_, args) => args.Cancel = !ResolveChanges() || !RememberWindowPlacements(notes, this);
+        FormClosing += (_, args) =>
+        {
+            if (args.CloseReason == CloseReason.UserClosing && Visible && editors.Count > 0)
+            {
+                args.Cancel = true;
+                Hide();
+                return;
+            }
+
+            args.Cancel = !ResolveChanges() || !RememberWindowPlacements(notes, this);
+        };
         FormClosed += (_, _) => CloseEditors();
         SystemEvents.UserPreferenceChanged += SystemPreferenceChanged;
         LoadNotes();
@@ -469,10 +479,31 @@ internal sealed class NotesForm : ResizableNoteWindow
             if (!closingEditors && notes.Contains(note))
                 args.Cancel = !RememberWindowPlacements([note], editor);
         };
-        editor.FormClosed += (_, _) => editors.Remove(note.Id);
+        editor.FormClosed += (_, _) => EditorClosed(note.Id);
         editor.SetAvailability(storageReady, dirty);
         editor.SetStatus(status.Text);
         editor.Show();
+    }
+
+    private void EditorClosed(Guid id)
+    {
+        editors.Remove(id);
+        if (closingEditors || Visible || editors.Count > 0) return;
+
+        // Wait until any action that closed the editor, such as deleting its note, has finished.
+        BeginInvoke(() =>
+        {
+            if (IsDisposed || Visible || editors.Count > 0) return;
+
+            if (SaveNotes())
+            {
+                Close();
+            }
+            else
+            {
+                BringUpNotes();
+            }
+        });
     }
 
     private void BringUpNotes()
