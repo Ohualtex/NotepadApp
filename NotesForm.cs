@@ -157,7 +157,7 @@ internal sealed class NotesForm : Form
         Rectangle card = Rectangle.Inflate(args.Bounds, -2, -4);
         bool selected = args.State.HasFlag(DrawItemState.Selected);
         using var background = new SolidBrush(selected ? Color.FromArgb(54, 60, 71) : Color.FromArgb(37, 41, 48));
-        using var accent = new SolidBrush(Color.FromArgb(173, 186, 228));
+        using var accent = new SolidBrush(NotePalette.Resolve(note.Accent).Color);
         args.Graphics.FillRectangle(background, card);
         args.Graphics.FillRectangle(accent, card.Right - 24, card.Top + 12, 12, 4);
 
@@ -269,7 +269,7 @@ internal sealed class NotesForm : Form
             return;
         }
 
-        var editor = new NoteEditorForm(note, EditNote, SaveNotes, DeleteNote, ExportNote);
+        var editor = new NoteEditorForm(note, EditNote, SaveNotes, DeleteNote, ExportNote, ChangeNoteAccent);
         editors.Add(note.Id, editor);
         editor.FormClosing += (_, args) =>
         {
@@ -354,6 +354,15 @@ internal sealed class NotesForm : Form
         {
             noteList.Items[index] = note;
         }
+        noteList.Invalidate();
+        SetDirty();
+    }
+
+    private void ChangeNoteAccent(Note note, string accentId)
+    {
+        if (NotePalette.Resolve(note.Accent).Id == accentId) return;
+
+        note.Accent = accentId == NotePalette.DefaultId ? null : accentId;
         noteList.Invalidate();
         SetDirty();
     }

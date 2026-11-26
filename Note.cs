@@ -18,6 +18,9 @@ internal sealed class Note
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public NoteWindowPlacement? WindowPlacement { get; set; }
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Accent { get; set; }
+
     [JsonIgnore]
     public string DisplayTitle => string.IsNullOrWhiteSpace(Title) ? "Untitled note" : Title;
 }
