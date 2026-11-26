@@ -5,6 +5,7 @@ namespace NotepadApp;
 internal sealed class NotesForm : Form
 {
     private readonly NoteStore store;
+    private readonly System.Windows.Forms.Timer autoSave = new() { Interval = 700 };
     private readonly Dictionary<Guid, NoteEditorForm> editors = [];
     private readonly ListBox noteList = new()
     {
@@ -75,6 +76,8 @@ internal sealed class NotesForm : Form
             search.Clear();
             search.Focus();
         };
+        autoSave.Tick += (_, _) => SaveNotes();
+        Disposed += (_, _) => autoSave.Dispose();
         add.Click += (_, _) => AddNote();
         save.Click += (_, _) => SaveNotes();
         reload.Click += (_, _) =>
@@ -218,6 +221,7 @@ internal sealed class NotesForm : Form
 
     private void LoadNotes()
     {
+        autoSave.Stop();
         try
         {
             var loaded = store.Load();
@@ -382,6 +386,8 @@ internal sealed class NotesForm : Form
     private void SetDirty()
     {
         dirty = true;
+        autoSave.Stop();
+        if (storageReady) autoSave.Start();
         SetStatus("Unsaved changes");
     }
 
@@ -399,6 +405,8 @@ internal sealed class NotesForm : Form
 
     private bool SaveNotes()
     {
+        autoSave.Stop();
+        if (!dirty) return true;
         if (!storageReady) return false;
         try
         {
@@ -416,14 +424,10 @@ internal sealed class NotesForm : Form
 
     private bool ResolveChanges()
     {
-        if (!dirty) return true;
-        return MessageBox.Show(this, "Save your changes?", "Unsaved changes", MessageBoxButtons.YesNoCancel,
-            MessageBoxIcon.Question, MessageBoxDefaultButton.Button1) switch
-        {
-            DialogResult.Yes => SaveNotes(),
-            DialogResult.No => true,
-            _ => false
-        };
+        if (SaveNotes()) return true;
+
+        return MessageBox.Show(this, "The changes could not be saved. Continue without saving?",
+            "Unsaved changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
     }
 
     private void ExportNote(NoteEditorForm editor, Note note)
