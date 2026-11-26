@@ -19,6 +19,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private readonly Font cardTitle = new("Segoe UI", 10, FontStyle.Bold);
     private readonly Font cardDate = new("Segoe UI", 8);
     private readonly NoteStore store;
+    private readonly NotePreviewRenderer previewRenderer = new();
     private readonly System.Windows.Forms.Timer autoSave = new() { Interval = 700 };
     private readonly Dictionary<Guid, NoteEditorForm> editors = [];
     private readonly ListBox noteList = new()
@@ -111,6 +112,7 @@ internal sealed class NotesForm : ResizableNoteWindow
             windowIconFont.Dispose();
             listHeading.Dispose();
             cardTitle.Dispose();
+            previewRenderer.Dispose();
             cardDate.Dispose();
         };
         add.Click += (_, _) => AddNote();
@@ -374,8 +376,9 @@ internal sealed class NotesForm : ResizableNoteWindow
         string preview = note.Content.Length == 0 && NoteImage.ContainsPicture(note.RichText) ? "Image" : note.Content;
         int previewTop = hasTitle ? text.Top + line + 2 : text.Top;
         int previewWidth = hasTitle ? text.Width : firstRowWidth;
-        DrawSearchText(args.Graphics, NoteSearch.GetSnippet(preview, searchQuery, 220),
-            new Rectangle(text.Left, previewTop, previewWidth, text.Bottom - previewTop), Font, theme.Ink, singleLine: false);
+        var previewBounds = new Rectangle(text.Left, previewTop, previewWidth, text.Bottom - previewTop);
+        if (!previewRenderer.Draw(args.Graphics, previewBounds, note, searchQuery, Font, theme, paper))
+            DrawSearchText(args.Graphics, NoteSearch.GetSnippet(preview, searchQuery, 220), previewBounds, Font, theme.Ink, singleLine: false);
     }
 
     private void DrawSearchText(Graphics graphics, string text, Rectangle bounds, Font font, Color foreground, bool singleLine)

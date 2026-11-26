@@ -1,5 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace NotepadApp;
 
@@ -32,6 +34,21 @@ internal static class NoteImage
         int displayHeight = displayed.Height * TwipsPerInch / dpi;
         return FormattableString.Invariant(
             $@"{{\rtf1\ansi{{\pict\pngblip\picw{stored.Width}\pich{stored.Height}\picwgoal{displayWidth}\pichgoal{displayHeight} {data}}}}}");
+    }
+
+    public static string FitPreview(string richText, int width, int height)
+    {
+        if (!ContainsPicture(richText)) return richText;
+
+        return Regex.Replace(richText, @"(?<!\\)\\picwgoal([0-9]+)\s*\\pichgoal([0-9]+)", match =>
+        {
+            if (!int.TryParse(match.Groups[1].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out int sourceWidth) ||
+                !int.TryParse(match.Groups[2].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out int sourceHeight) ||
+                sourceWidth <= 0 || sourceHeight <= 0) return match.Value;
+
+            Size fitted = Fit(new Size(sourceWidth, sourceHeight), new Size(width, height));
+            return FormattableString.Invariant($@"\picwgoal{fitted.Width}\pichgoal{fitted.Height}");
+        });
     }
 
     private static Size Fit(Size image, Size available)

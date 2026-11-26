@@ -118,7 +118,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         {
             string? richText = content.Rtf;
             bool hasImage = NoteImage.ContainsPicture(richText);
-            string plainText = GetPlainContent(hasImage);
+            string plainText = NoteRichContent.PlainText(content, hasImage);
             UpdateNote(plainText, plainText.Length > 0 || hasImage ? richText : null);
         }
 
@@ -271,28 +271,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
 
     private void LoadContent(Note note)
     {
-        if (!string.IsNullOrEmpty(note.RichText))
-        {
-            try
-            {
-                content.Rtf = note.RichText;
-                string plainText = GetPlainContent(NoteImage.ContainsPicture(note.RichText));
-                if (plainText.ReplaceLineEndings("\n") == note.Content.ReplaceLineEndings("\n")) return;
-            }
-            catch (ArgumentException)
-            {
-                // Plain content is still available if the optional RTF is invalid.
-            }
-        }
-
-        content.Text = note.Content;
-    }
-
-    private string GetPlainContent(bool hasImage)
-    {
-        // Rich Edit represents each inline image as a space when it returns plain text.
-        string text = content.Text;
-        return hasImage && string.IsNullOrWhiteSpace(text) ? "" : text;
+        if (!NoteRichContent.TryLoad(content, note, note.RichText)) content.Text = note.Content;
     }
 
     private void ChooseImage(Action updateContent)
