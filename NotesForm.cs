@@ -5,183 +5,236 @@ namespace NotepadApp;
 internal sealed class NotesForm : Form
 {
     private readonly NoteStore store;
-    private readonly ListBox noteList = new() { Dock = DockStyle.Fill, IntegralHeight = false, DisplayMember = nameof(Note.DisplayTitle) };
-    private readonly TextBox title = new() { Dock = DockStyle.Fill, AccessibleName = "Note title" };
-    private readonly RichTextBox content = new() { Dock = DockStyle.Fill, AccessibleName = "Note content", DetectUrls = false };
-    private readonly Label dates = new() { Dock = DockStyle.Fill, AutoSize = true };
-    private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true };
-    private readonly Button add = new() { Text = "New note", AutoSize = true };
-    private readonly Button delete = new() { Text = "Delete", AutoSize = true };
-    private readonly Button save = new() { Text = "Save", AutoSize = true };
+    private readonly Dictionary<Guid, NoteEditorForm> editors = [];
+    private readonly ListBox noteList = new()
+    {
+        Dock = DockStyle.Fill,
+        BorderStyle = BorderStyle.None,
+        IntegralHeight = false,
+        DrawMode = DrawMode.OwnerDrawFixed,
+        DisplayMember = nameof(Note.DisplayTitle),
+        AccessibleName = "Notes",
+        BackColor = Color.FromArgb(26, 28, 32),
+        ForeColor = Color.WhiteSmoke
+    };
+    private readonly Button add = new() { Text = "+ New note", AutoSize = true };
+    private readonly Button save = new() { Text = "Save all", AutoSize = true };
     private readonly Button reload = new() { Text = "Reload", AutoSize = true };
-    private readonly Button export = new() { Text = "Export .txt", AutoSize = true };
+    private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(0, 8, 0, 0) };
     private List<Note> notes = [];
-    private bool binding;
     private bool dirty;
     private bool storageReady;
 
     public NotesForm(NoteStore store)
     {
         this.store = store;
-        Text = "Notepad";
+        Text = "NotepadApp";
         Font = new Font("Segoe UI", 10);
-        ClientSize = new Size(960, 640);
-        MinimumSize = new Size(660, 420);
+        BackColor = noteList.BackColor;
+        ForeColor = noteList.ForeColor;
+        ClientSize = new Size(420, 570);
+        MinimumSize = new Size(320, 360);
         StartPosition = FormStartPosition.CenterScreen;
         Controls.Add(BuildWorkspace());
 
-        noteList.SelectedIndexChanged += (_, _) => ShowSelection();
-        title.TextChanged += (_, _) => UpdateSelection();
-        content.TextChanged += (_, _) => UpdateSelection();
+        noteList.ItemHeight = TextRenderer.MeasureText("Ag", Font).Height * 4 + 28;
+        noteList.DrawItem += DrawNoteCard;
+        noteList.MouseClick += (_, args) =>
+        {
+            int index = noteList.IndexFromPoint(args.Location);
+            if (args.Button == MouseButtons.Left && index >= 0)
+                OpenEditor((Note)noteList.Items[index]);
+        };
+        noteList.KeyDown += (_, args) =>
+        {
+            if (args.KeyCode != Keys.Enter || noteList.SelectedItem is not Note note) return;
+            args.SuppressKeyPress = true;
+            OpenEditor(note);
+        };
         add.Click += (_, _) => AddNote();
-        delete.Click += (_, _) => DeleteNote();
         save.Click += (_, _) => SaveNotes();
         reload.Click += (_, _) => { if (ResolveChanges()) LoadNotes(); };
-        export.Click += (_, _) => ExportNote();
         FormClosing += (_, args) => args.Cancel = !ResolveChanges();
-
+        FormClosed += (_, _) => CloseEditors();
         LoadNotes();
     }
 
     private Control BuildWorkspace()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, Padding = new Padding(16) };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(14) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
-        actions.Controls.AddRange([add, save, reload, delete, export]);
-        root.Controls.Add(actions, 0, 0);
-        root.SetColumnSpan(actions, 2);
-        root.Controls.Add(noteList, 0, 1);
+        var heading = new Label { Text = "Notes", AutoSize = true, Margin = new Padding(3, 0, 3, 8) };
+        var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
+        actions.Controls.AddRange([add, save, reload]);
+        foreach (Button button in actions.Controls) StyleButton(button);
+        layout.Controls.Add(heading, 0, 0);
+        layout.Controls.Add(actions, 0, 1);
+        layout.Controls.Add(noteList, 0, 2);
+        layout.Controls.Add(status, 0, 3);
+        return layout;
+    }
 
-        var editor = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(8, 0, 0, 0) };
-        editor.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        editor.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        editor.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        title.PlaceholderText = "Title";
-        dates.Padding = new Padding(0, 6, 0, 0);
-        editor.Controls.Add(title, 0, 0);
-        editor.Controls.Add(content, 0, 1);
-        editor.Controls.Add(dates, 0, 2);
-        root.Controls.Add(editor, 1, 1);
-        status.Padding = new Padding(0, 8, 0, 0);
-        root.Controls.Add(status, 0, 2);
-        root.SetColumnSpan(status, 2);
-        return root;
+    internal static void StyleButton(Button button)
+    {
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(67, 72, 83);
+        button.FlatAppearance.MouseDownBackColor = Color.FromArgb(40, 44, 52);
+        button.BackColor = Color.FromArgb(50, 55, 65);
+        button.ForeColor = Color.WhiteSmoke;
+        button.Padding = new Padding(8, 4, 8, 4);
+    }
+
+    private void DrawNoteCard(object? sender, DrawItemEventArgs args)
+    {
+        using var listBackground = new SolidBrush(noteList.BackColor);
+        args.Graphics.FillRectangle(listBackground, args.Bounds);
+        if (args.Index < 0 || args.Index >= noteList.Items.Count) return;
+        var note = (Note)noteList.Items[args.Index];
+        Rectangle card = Rectangle.Inflate(args.Bounds, -2, -4);
+        bool selected = args.State.HasFlag(DrawItemState.Selected);
+        using var background = new SolidBrush(selected ? Color.FromArgb(54, 60, 71) : Color.FromArgb(37, 41, 48));
+        using var accent = new SolidBrush(Color.FromArgb(173, 186, 228));
+        args.Graphics.FillRectangle(background, card);
+        args.Graphics.FillRectangle(accent, card.Right - 24, card.Top + 12, 12, 4);
+
+        Rectangle text = Rectangle.Inflate(card, -12, -8);
+        int line = TextRenderer.MeasureText("Ag", Font).Height;
+        const TextFormatFlags singleLine = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+        TextRenderer.DrawText(args.Graphics, note.DisplayTitle, Font,
+            new Rectangle(text.Left, text.Top, Math.Max(0, text.Width - 24), line), ForeColor, singleLine);
+        TextRenderer.DrawText(args.Graphics, note.Content.Trim(), Font,
+            new Rectangle(text.Left, text.Top + line + 2, text.Width, line * 2), Color.Gainsboro,
+            TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        TextRenderer.DrawText(args.Graphics, note.UpdatedAt.LocalDateTime.ToString("d"), Font,
+            new Rectangle(text.Left, text.Bottom - line, text.Width, line), Color.Silver, singleLine | TextFormatFlags.Right);
+        if (noteList.Focused && args.State.HasFlag(DrawItemState.Focus))
+        {
+            using var outline = new Pen(Color.FromArgb(173, 186, 228));
+            args.Graphics.DrawRectangle(outline, card.Left, card.Top, card.Width - 1, card.Height - 1);
+        }
     }
 
     private void LoadNotes()
     {
         try
         {
-            notes = store.Load();
+            var loaded = store.Load();
+            CloseEditors();
+            notes = loaded;
             storageReady = true;
             dirty = false;
             RefreshList(notes.FirstOrDefault());
-            status.Text = notes.Count == 0 ? "No saved notes. Select New note to begin." : $"Loaded {notes.Count} notes.";
+            SetStatus(notes.Count == 0 ? "No saved notes. Select New note to begin." : $"Loaded {notes.Count} notes.");
         }
         catch (Exception error) when (IsStorageError(error))
         {
             storageReady = false;
-            ShowSelection();
-            status.Text = $"Could not load notes. {error.Message} Fix the file and select Reload.";
+            SetStatus($"Could not load notes. {error.Message} Fix the file and select Reload.");
         }
     }
 
     private void RefreshList(Note? selection)
     {
-        binding = true;
+        int previousTop = noteList.TopIndex;
+        noteList.BeginUpdate();
         try
         {
             noteList.Items.Clear();
             noteList.Items.AddRange(notes.ToArray());
             noteList.SelectedItem = selection;
+            if (noteList.Items.Count > 0) noteList.TopIndex = Math.Clamp(previousTop, 0, noteList.Items.Count - 1);
         }
         finally
         {
-            binding = false;
+            noteList.EndUpdate();
         }
-
-        ShowSelection();
     }
 
-    private void ShowSelection()
+    private void OpenEditor(Note note)
     {
-        if (binding) return;
-        var selected = noteList.SelectedItem as Note;
-        binding = true;
-        try
+        if (editors.TryGetValue(note.Id, out var existing))
         {
-            title.Text = selected?.Title ?? "";
-            content.Text = selected?.Content ?? "";
-            UpdateDates(selected);
-        }
-        finally
-        {
-            binding = false;
+            if (existing.WindowState == FormWindowState.Minimized) existing.WindowState = FormWindowState.Normal;
+            existing.Activate();
+            return;
         }
 
-        title.Enabled = content.Enabled = delete.Enabled = storageReady && selected is not null;
-        add.Enabled = storageReady;
-        save.Enabled = storageReady && dirty;
-        export.Enabled = selected is not null;
+        var editor = new NoteEditorForm(note, EditNote, SaveNotes, DeleteNote, ExportNote);
+        editors.Add(note.Id, editor);
+        editor.FormClosed += (_, _) => editors.Remove(note.Id);
+        editor.SetAvailability(storageReady, dirty);
+        editor.SetStatus(status.Text);
+        editor.Show();
     }
 
-    private void UpdateSelection()
+    private void CloseEditors()
     {
-        if (binding || noteList.SelectedItem is not Note note) return;
-        bool titleChanged = note.Title != title.Text;
-        if (!titleChanged && note.Content == content.Text) return;
-
-        note.Title = title.Text;
-        note.Content = content.Text;
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        note.UpdatedAt = now < note.CreatedAt ? note.CreatedAt : now;
-        if (titleChanged)
-        {
-            binding = true;
-            try { noteList.Items[noteList.SelectedIndex] = note; }
-            finally { binding = false; }
-        }
-
-        UpdateDates(note);
-        MarkDirty();
+        // Closing an editor removes it from the dictionary through FormClosed.
+        foreach (var editor in editors.Values.ToArray()) editor.Close();
     }
-
-    private void UpdateDates(Note? note) => dates.Text = note is null ? "" :
-        $"Created {note.CreatedAt.ToLocalTime():g}   ·   Updated {note.UpdatedAt.ToLocalTime():g}";
 
     private void AddNote()
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         var note = new Note { CreatedAt = now, UpdatedAt = now };
-        notes.Add(note);
-        MarkDirty();
+        notes.Insert(0, note);
         RefreshList(note);
-        title.Focus();
+        noteList.TopIndex = 0;
+        SetDirty();
+        OpenEditor(note);
     }
 
-    private void DeleteNote()
+    private void EditNote(Note note, string title, string content)
     {
-        if (noteList.SelectedItem is not Note note) return;
-        if (MessageBox.Show(this, $"Delete “{note.DisplayTitle}”?", "Delete note", MessageBoxButtons.YesNo,
+        if (note.Title == title && note.Content == content) return;
+        bool titleChanged = note.Title != title;
+        note.Title = title;
+        note.Content = content;
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        note.UpdatedAt = now < note.CreatedAt ? note.CreatedAt : now;
+        if (titleChanged)
+        {
+            int index = noteList.Items.IndexOf(note);
+            if (index >= 0) noteList.Items[index] = note;
+        }
+        noteList.Invalidate();
+        SetDirty();
+    }
+
+    private void DeleteNote(NoteEditorForm editor, Note note)
+    {
+        if (MessageBox.Show(editor, $"Delete “{note.DisplayTitle}”?", "Delete note", MessageBoxButtons.YesNo,
             MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
-        int index = noteList.SelectedIndex;
-        notes.Remove(note);
-        MarkDirty();
+        int index = notes.IndexOf(note);
+        editor.Close();
+        notes.RemoveAt(index);
         RefreshList(notes.Count == 0 ? null : notes[Math.Min(index, notes.Count - 1)]);
+        SetDirty();
     }
 
-    private void MarkDirty()
+    private void SetDirty()
     {
         dirty = true;
-        save.Enabled = storageReady;
-        status.Text = "Unsaved changes";
+        SetStatus("Unsaved changes");
+    }
+
+    private void SetStatus(string message)
+    {
+        status.Text = message;
+        add.Enabled = storageReady;
+        save.Enabled = storageReady && dirty;
+        foreach (var editor in editors.Values)
+        {
+            editor.SetAvailability(storageReady, dirty);
+            editor.SetStatus(message);
+        }
     }
 
     private bool SaveNotes()
@@ -191,13 +244,12 @@ internal sealed class NotesForm : Form
         {
             store.Save(notes);
             dirty = false;
-            save.Enabled = false;
-            status.Text = $"Saved {notes.Count} notes.";
+            SetStatus($"Saved {notes.Count} notes.");
             return true;
         }
         catch (Exception error) when (IsStorageError(error))
         {
-            status.Text = $"Could not save notes. {error.Message}";
+            SetStatus($"Could not save notes. {error.Message}");
             return false;
         }
     }
@@ -214,19 +266,18 @@ internal sealed class NotesForm : Form
         };
     }
 
-    private void ExportNote()
+    private void ExportNote(NoteEditorForm editor, Note note)
     {
-        if (noteList.SelectedItem is not Note note) return;
         using var dialog = new SaveFileDialog { Title = "Export note", Filter = "Text files (*.txt)|*.txt", DefaultExt = "txt", AddExtension = true };
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (dialog.ShowDialog(editor) != DialogResult.OK) return;
         try
         {
             NoteStore.Export(note, dialog.FileName);
-            status.Text = $"Exported {Path.GetFileName(dialog.FileName)}.";
+            editor.SetStatus($"Exported {Path.GetFileName(dialog.FileName)}.");
         }
         catch (Exception error) when (IsStorageError(error))
         {
-            status.Text = $"Could not export the note. {error.Message}";
+            editor.SetStatus($"Could not export the note. {error.Message}");
         }
     }
 
