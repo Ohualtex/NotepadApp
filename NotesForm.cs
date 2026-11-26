@@ -276,6 +276,7 @@ internal sealed class NotesForm : Form
         searchRow.Invalidate(true);
         noteList.Invalidate();
         settings.Apply(theme, preferences);
+        foreach (var editor in editors.Values) editor.ApplyTheme(theme);
     }
 
     internal static void StyleButton(ButtonBase button)
@@ -428,7 +429,7 @@ internal sealed class NotesForm : Form
             return;
         }
 
-        var editor = new NoteEditorForm(note, EditNote, SaveNotes, DeleteNote, ExportNote, ChangeNoteAccent);
+        var editor = new NoteEditorForm(note, theme, EditNote, SaveNotes, DeleteNote, ExportNote, ChangeNoteAccent, AddNote, BringUpNotes);
         editors.Add(note.Id, editor);
         editor.FormClosing += (_, args) =>
         {
@@ -439,6 +440,13 @@ internal sealed class NotesForm : Form
         editor.SetAvailability(storageReady, dirty);
         editor.SetStatus(status.Text);
         editor.Show();
+    }
+
+    private void BringUpNotes()
+    {
+        ShowNotes();
+        Show();
+        Activate();
     }
 
     private void CloseEditors()
