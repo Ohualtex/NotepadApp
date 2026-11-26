@@ -29,18 +29,16 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private readonly TableLayoutPanel header = new() { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
     private readonly Label contentHint = new() { Text = "Write a note…", AutoSize = true, Location = new Point(12, 6), Visible = false };
     private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Visible = false };
-    private readonly ToolStripMenuItem dates = new() { Enabled = false };
-    private readonly ToolStripMenuItem save = new("Save all");
+    private readonly Panel writingArea = new() { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(12, 6, 9, 4) };
+    private readonly NoteOptionsPanel drawer;
     private readonly Button newNote = new() { Text = "+", AccessibleName = "New note", Dock = DockStyle.Fill };
     private readonly Button options = new() { Text = "⋯", AccessibleName = "Note options", Dock = DockStyle.Fill };
     private readonly Button close = new() { Text = "×", AccessibleName = "Close note", Dock = DockStyle.Fill };
-    private readonly ContextMenuStrip noteMenu = new();
     private readonly ToolTip formatToolTip = new();
     private readonly Dictionary<FontStyle, CheckBox> styleButtons = [];
     private readonly CheckBox bullets = CreateFormatButton("", "Bulleted list");
     private readonly Button insertImage = new() { AccessibleName = "Insert image" };
     private readonly FlowLayoutPanel formatTools = new() { Dock = DockStyle.Fill, AutoSize = true };
-    private readonly ToolStripMenuItem export = new("Export .txt");
 
     public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string, string?> edit, Func<bool> saveNotes,
         Action<NoteEditorForm, Note> deleteNote, Action<NoteEditorForm, Note> exportNote, Action<Note, string> changeAccent,
@@ -59,7 +57,36 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         Font = new Font("Segoe UI", 10);
 
         title.Text = note.Title;
-        UpdateDates(note);
+        drawer = new NoteOptionsPanel(
+            accent =>
+            {
+                changeAccent(note, accent);
+                ApplyTheme(this.theme);
+            },
+            () =>
+            {
+                CloseDrawer();
+                showNotes();
+            },
+            () =>
+            {
+                CloseDrawer();
+                saveNotes();
+            },
+            () =>
+            {
+                CloseDrawer();
+                exportNote(this, note);
+            },
+            () =>
+            {
+                CloseDrawer();
+                deleteNote(this, note);
+            })
+        {
+            Visible = false
+        };
+        drawer.SetDates(note);
         Controls.Add(BuildWorkspace());
         // Adding the editor to the form applies its inherited font before RTF is loaded.
         LoadContent(note);
@@ -84,7 +111,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             edit(note, title.Text, plainText, richText);
             Text = note.DisplayTitle;
             titleCaption.Text = note.Title;
-            UpdateDates(note);
+            drawer.SetDates(note);
         }
 
         void UpdateContent()
@@ -104,22 +131,27 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         content.SelectionChanged += (_, _) => UpdateFormatState();
         ConfigureFormatTools(UpdateContent);
         insertImage.Click += (_, _) => ChooseImage(UpdateContent);
-        save.Click += (_, _) => saveNotes();
-        ConfigureNoteMenu(deleteNote, changeAccent, showNotes);
-        options.Click += (_, _) => noteMenu.Show(options, new Point(0, options.Height), ToolStripDropDownDirection.BelowLeft);
+        options.Click += (_, _) => ToggleDrawer();
+        content.MouseDown += (_, _) => CloseDrawer();
+        contentHint.MouseDown += (_, _) => CloseDrawer();
+        writingArea.Resize += (_, _) =>
+        {
+            if (drawer.Visible) drawer.FitTo(writingArea.ClientSize);
+        };
         newNote.Click += (_, _) => addNote();
         close.Click += (_, _) => Close();
         ApplyTheme(theme);
-        Disposed += (_, _) =>
-        {
-            noteMenu.Dispose();
-            formatToolTip.Dispose();
-        };
-        export.Click += (_, _) => exportNote(this, note);
+        Disposed += (_, _) => formatToolTip.Dispose();
     }
 
     protected override bool ProcessCmdKey(ref Message message, Keys keyData)
     {
+        if (keyData == Keys.Escape && drawer.Visible)
+        {
+            CloseDrawer();
+            return true;
+        }
+
         if (keyData == Keys.F2 && chromeVisible && title.Enabled)
         {
             BeginTitleEdit();
@@ -129,9 +161,32 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         return base.ProcessCmdKey(ref message, keyData);
     }
 
+    private void ToggleDrawer()
+    {
+        if (drawer.Visible)
+        {
+            CloseDrawer();
+            return;
+        }
+
+        EndTitleEdit();
+        drawer.FitTo(writingArea.ClientSize);
+        drawer.Show();
+        drawer.BringToFront();
+        drawer.FocusSelection();
+    }
+
+    private void CloseDrawer(bool restoreFocus = true)
+    {
+        if (!drawer.Visible) return;
+        drawer.Hide();
+        if (restoreFocus) content.Focus();
+    }
+
     private void BeginTitleEdit()
     {
         if (!title.Enabled) return;
+        CloseDrawer(restoreFocus: false);
         titleCaption.Hide();
         title.Show();
         title.Focus();
@@ -148,7 +203,11 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     {
         chromeVisible = visible;
         header.Visible = formatTools.Visible = visible;
-        if (!visible) EndTitleEdit();
+        if (!visible)
+        {
+            CloseDrawer(restoreFocus: false);
+            EndTitleEdit();
+        }
         UpdateContentHint();
         PaintChrome();
     }
@@ -185,6 +244,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             }
         }
 
+        drawer.Apply(theme, note.Accent);
         PaintChrome();
     }
 
@@ -377,41 +437,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         Bounds = new Rectangle(left, top, width, height);
     }
 
-    private void ConfigureNoteMenu(Action<NoteEditorForm, Note> deleteNote, Action<Note, string> changeAccent, Action showNotes)
-    {
-        noteMenu.BackColor = Color.FromArgb(41, 45, 54);
-        noteMenu.ForeColor = ForeColor;
-        noteMenu.ShowImageMargin = false;
-        noteMenu.ShowCheckMargin = true;
-        noteMenu.Renderer = new ToolStripProfessionalRenderer(new NoteMenuColors());
-
-        var current = NotePalette.Resolve(note.Accent);
-        ToolStripMenuItem? selected = null;
-        foreach (var accent in NotePalette.Colors)
-        {
-            var item = new ToolStripMenuItem(accent.Label) { ForeColor = accent.Color, Checked = accent.Id == current.Id };
-            if (item.Checked) selected = item;
-            item.Click += (_, _) =>
-            {
-                if (selected is not null) selected.Checked = false;
-                item.Checked = true;
-                selected = item;
-                changeAccent(note, accent.Id);
-                ApplyTheme(theme);
-            };
-
-            noteMenu.Items.Add(item);
-        }
-
-        noteMenu.Items.Add(new ToolStripSeparator());
-        var delete = new ToolStripMenuItem("Delete note") { ForeColor = Color.WhiteSmoke };
-        delete.Click += (_, _) => deleteNote(this, note);
-        var notesList = new ToolStripMenuItem("Notes list") { ForeColor = Color.WhiteSmoke };
-        notesList.Click += (_, _) => showNotes();
-        save.ForeColor = export.ForeColor = delete.ForeColor = Color.WhiteSmoke;
-        noteMenu.Items.AddRange([notesList, save, export, delete, new ToolStripSeparator(), dates]);
-    }
-
     private Control BuildWorkspace()
     {
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
@@ -443,44 +468,27 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         formatTools.Margin = Padding.Empty;
         formatTools.WrapContents = false;
         layout.Controls.Add(header, 0, 0);
-        var writingArea = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(12, 6, 9, 4) };
+
         content.Margin = Padding.Empty;
         writingArea.Controls.Add(content);
         writingArea.Controls.Add(contentHint);
         contentHint.BringToFront();
+        writingArea.Controls.Add(drawer);
         layout.Controls.Add(writingArea, 0, 1);
         layout.Controls.Add(status, 0, 2);
         layout.Controls.Add(formatTools, 0, 3);
         return layout;
     }
 
-    private void UpdateDates(Note note)
-    {
-        dates.Text = $"Created {note.CreatedAt.ToLocalTime():g} · Updated {note.UpdatedAt.ToLocalTime():g}";
-    }
-
     public void SetAvailability(bool storageReady, bool dirty)
     {
         title.Enabled = content.Enabled = newNote.Enabled = formatTools.Enabled = storageReady;
-        save.Enabled = storageReady && dirty;
+        drawer.SetAvailability(storageReady, dirty);
     }
 
     public void SetStatus(string message)
     {
         status.Text = message;
         status.Visible = message.StartsWith("Could not ", StringComparison.Ordinal);
-    }
-
-    private sealed class NoteMenuColors : ProfessionalColorTable
-    {
-        private static readonly Color Surface = Color.FromArgb(41, 45, 54);
-        public override Color ToolStripDropDownBackground => Surface;
-        public override Color ImageMarginGradientBegin => Surface;
-        public override Color ImageMarginGradientMiddle => Surface;
-        public override Color ImageMarginGradientEnd => Surface;
-        public override Color MenuItemSelected => Color.FromArgb(58, 65, 78);
-        public override Color MenuItemBorder => MenuItemSelected;
-        public override Color MenuBorder => Color.FromArgb(83, 91, 109);
-        public override Color CheckBackground => MenuBorder;
     }
 }
