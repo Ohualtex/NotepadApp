@@ -24,6 +24,7 @@ internal sealed class NotesForm : Form
     private List<Note> notes = [];
     private bool dirty;
     private bool storageReady;
+    private bool closingEditors;
 
     public NotesForm(NoteStore store)
     {
@@ -53,8 +54,11 @@ internal sealed class NotesForm : Form
         };
         add.Click += (_, _) => AddNote();
         save.Click += (_, _) => SaveNotes();
-        reload.Click += (_, _) => { if (ResolveChanges()) LoadNotes(); };
-        FormClosing += (_, args) => args.Cancel = !ResolveChanges();
+        reload.Click += (_, _) =>
+        {
+            if (ResolveChanges() && RememberWindowPlacements(notes, this)) LoadNotes();
+        };
+        FormClosing += (_, args) => args.Cancel = !ResolveChanges() || !RememberWindowPlacements(notes, this);
         FormClosed += (_, _) => CloseEditors();
         LoadNotes();
     }
@@ -167,6 +171,11 @@ internal sealed class NotesForm : Form
 
         var editor = new NoteEditorForm(note, EditNote, SaveNotes, DeleteNote, ExportNote);
         editors.Add(note.Id, editor);
+        editor.FormClosing += (_, args) =>
+        {
+            if (!closingEditors && notes.Contains(note))
+                args.Cancel = !RememberWindowPlacements([note], editor);
+        };
         editor.FormClosed += (_, _) => editors.Remove(note.Id);
         editor.SetAvailability(storageReady, dirty);
         editor.SetStatus(status.Text);
@@ -175,8 +184,45 @@ internal sealed class NotesForm : Form
 
     private void CloseEditors()
     {
-        // Closing an editor removes it from the dictionary through FormClosed.
-        foreach (var editor in editors.Values.ToArray()) editor.Close();
+        // The list saves the open windows together before reload or exit.
+        closingEditors = true;
+        try
+        {
+            foreach (var editor in editors.Values.ToArray()) editor.Close();
+        }
+        finally
+        {
+            closingEditors = false;
+        }
+    }
+
+    private bool RememberWindowPlacements(IEnumerable<Note> candidates, IWin32Window owner)
+    {
+        var placements = new Dictionary<Guid, NoteWindowPlacement>();
+        foreach (var note in candidates)
+        {
+            if (!editors.TryGetValue(note.Id, out var editor)) continue;
+            NoteWindowPlacement placement = editor.GetWindowPlacement();
+            if (placement != note.WindowPlacement) placements.Add(note.Id, placement);
+        }
+
+        if (placements.Count == 0) return true;
+
+        try
+        {
+            if (storageReady) store.SaveWindowPlacements(placements);
+            foreach (var note in candidates)
+            {
+                if (placements.TryGetValue(note.Id, out var placement)) note.WindowPlacement = placement;
+            }
+
+            return true;
+        }
+        catch (Exception error) when (IsStorageError(error))
+        {
+            return MessageBox.Show(owner, $"Could not save note window positions. {error.Message}\n\nContinue without saving the positions?",
+                "Window positions", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        }
     }
 
     private void AddNote()
@@ -213,8 +259,8 @@ internal sealed class NotesForm : Form
             MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
         int index = notes.IndexOf(note);
-        editor.Close();
         notes.RemoveAt(index);
+        editor.Close();
         RefreshList(notes.Count == 0 ? null : notes[Math.Min(index, notes.Count - 1)]);
         SetDirty();
     }

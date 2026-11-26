@@ -15,6 +15,9 @@ internal sealed class Note
     [JsonRequired]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public NoteWindowPlacement? WindowPlacement { get; set; }
+
     [JsonIgnore]
     public string DisplayTitle => string.IsNullOrWhiteSpace(Title) ? "Untitled note" : Title;
 }

@@ -28,7 +28,7 @@ internal sealed class NoteEditorForm : Form
         Text = note.DisplayTitle;
         ClientSize = new Size(390, 350);
         MinimumSize = new Size(305, 240);
-        StartPosition = FormStartPosition.WindowsDefaultLocation;
+        RestoreWindowPlacement(note.WindowPlacement);
         Font = new Font("Segoe UI", 10);
         BackColor = Color.FromArgb(30, 33, 38);
         ForeColor = Color.WhiteSmoke;
@@ -52,6 +52,26 @@ internal sealed class NoteEditorForm : Form
         save.Click += (_, _) => saveNotes();
         delete.Click += (_, _) => deleteNote(this, note);
         export.Click += (_, _) => exportNote(this, note);
+    }
+
+    public NoteWindowPlacement GetWindowPlacement()
+    {
+        Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        return new NoteWindowPlacement(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+    }
+
+    private void RestoreWindowPlacement(NoteWindowPlacement? placement)
+    {
+        StartPosition = FormStartPosition.WindowsDefaultLocation;
+        if (placement is not { Width: > 0, Height: > 0 }) return;
+
+        Rectangle area = Screen.FromPoint(new Point(placement.X, placement.Y)).WorkingArea;
+        int width = Math.Clamp(placement.Width, Math.Min(MinimumSize.Width, area.Width), area.Width);
+        int height = Math.Clamp(placement.Height, Math.Min(MinimumSize.Height, area.Height), area.Height);
+        int left = Math.Clamp(placement.X, area.Left, area.Right - width);
+        int top = Math.Clamp(placement.Y, area.Top, area.Bottom - height);
+        StartPosition = FormStartPosition.Manual;
+        Bounds = new Rectangle(left, top, width, height);
     }
 
     private Control BuildWorkspace()

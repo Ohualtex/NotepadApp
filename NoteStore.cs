@@ -34,6 +34,22 @@ internal sealed class NoteStore(string path)
         return notes;
     }
 
+    public void SaveWindowPlacements(IReadOnlyDictionary<Guid, NoteWindowPlacement> placements)
+    {
+        // Read from disk so moving an editor cannot persist unsaved note content or pending deletions.
+        List<Note> savedNotes = Load();
+        bool changed = false;
+
+        foreach (var note in savedNotes)
+        {
+            if (!placements.TryGetValue(note.Id, out var placement) || note.WindowPlacement == placement) continue;
+            note.WindowPlacement = placement;
+            changed = true;
+        }
+
+        if (changed) Save(savedNotes);
+    }
+
     public void Save(List<Note> notes)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
