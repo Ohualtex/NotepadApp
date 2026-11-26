@@ -7,6 +7,29 @@ internal sealed class NoteStore(string path)
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
+    private string PreferencesPath => Path.Combine(Path.GetDirectoryName(path)!, "settings.json");
+
+    public AppPreferences LoadPreferences()
+    {
+        try
+        {
+            var preferences = JsonSerializer.Deserialize<AppPreferences>(File.ReadAllText(PreferencesPath), Options);
+            return preferences is not null && Enum.IsDefined(preferences.Theme)
+                ? preferences
+                : throw new InvalidDataException("The settings file contains invalid preferences.");
+        }
+        catch (FileNotFoundException)
+        {
+            return new AppPreferences();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return new AppPreferences();
+        }
+    }
+
+    public void SavePreferences(AppPreferences preferences) => WriteJson(PreferencesPath, preferences);
+
     public List<Note> Load()
     {
         string json;
@@ -50,19 +73,21 @@ internal sealed class NoteStore(string path)
         if (changed) Save(savedNotes);
     }
 
-    public void Save(List<Note> notes)
+    public void Save(List<Note> notes) => WriteJson(path, notes);
+
+    private static void WriteJson<T>(string destination, T value)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        string pendingPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        string pendingPath = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             using (var stream = new FileStream(pendingPath, FileMode.CreateNew))
             {
-                JsonSerializer.Serialize(stream, notes, Options);
+                JsonSerializer.Serialize(stream, value, Options);
                 stream.Flush(flushToDisk: true);
             }
 
-            File.Move(pendingPath, path, overwrite: true);
+            File.Move(pendingPath, destination, overwrite: true);
         }
         finally
         {

@@ -1,14 +1,18 @@
 using System.Drawing.Drawing2D;
 using System.Text.Json;
+using Microsoft.Win32;
 
 namespace NotepadApp;
 
 internal sealed class NotesForm : Form
 {
-    private static readonly Color ListSurface = Color.FromArgb(246, 242, 237);
-    private static readonly Color Ink = Color.FromArgb(40, 35, 43);
-    private static readonly Color MutedInk = Color.FromArgb(87, 78, 86);
-    private static readonly Color SearchSurface = Color.FromArgb(235, 229, 224);
+    private AppPreferences preferences = new();
+    private NotesTheme theme = NotesTheme.Resolve(ThemePreference.Light);
+    private readonly Control workspace;
+    private readonly NotesSettingsView settings;
+    private readonly Button settingsButton = new() { Text = "⚙", AccessibleName = "Settings", AutoSize = true, Anchor = AnchorStyles.Right };
+    private readonly TableLayoutPanel searchRow = new() { Height = 38, Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(7, 4, 7, 4) };
+    private readonly Label searchHint = new() { Text = "Search notes", Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft };
     private readonly Font listHeading = new("Segoe UI", 14, FontStyle.Bold);
     private readonly Font cardTitle = new("Segoe UI", 10, FontStyle.Bold);
     private readonly Font cardDate = new("Segoe UI", 8);
@@ -22,9 +26,7 @@ internal sealed class NotesForm : Form
         IntegralHeight = false,
         DrawMode = DrawMode.OwnerDrawFixed,
         DisplayMember = nameof(Note.DisplayTitle),
-        AccessibleName = "Notes",
-        BackColor = ListSurface,
-        ForeColor = Ink
+        AccessibleName = "Notes"
     };
     private readonly Button add = new() { Text = "+ New note", AutoSize = true };
     private readonly Button save = new() { Text = "Save all", AutoSize = true };
@@ -33,9 +35,7 @@ internal sealed class NotesForm : Form
     {
         Dock = DockStyle.Fill,
         AccessibleName = "Search notes",
-        BorderStyle = BorderStyle.None,
-        BackColor = SearchSurface,
-        ForeColor = Ink
+        BorderStyle = BorderStyle.None
     };
     private readonly Button clearSearch = new() { Text = "×", AccessibleName = "Clear search", AutoSize = true, Visible = false };
     private readonly Label noResults = new() { Text = "No matching notes.", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Visible = false };
@@ -51,14 +51,24 @@ internal sealed class NotesForm : Form
         this.store = store;
         Text = "NotepadApp";
         Font = new Font("Segoe UI", 10);
-        BackColor = noteList.BackColor;
-        ForeColor = noteList.ForeColor;
+
         ClientSize = new Size(420, 570);
         MinimumSize = new Size(320, 360);
         MinimizeBox = false;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        Controls.Add(BuildWorkspace());
+        workspace = BuildWorkspace();
+        settings = new NotesSettingsView(ShowNotes,
+            mode => ChangePreferences(preferences with { Theme = mode }),
+            confirm => ChangePreferences(preferences with { ConfirmBeforeDeleting = confirm }))
+        {
+            Dock = DockStyle.Fill,
+            Visible = false
+        };
+        Controls.Add(workspace);
+        Controls.Add(settings);
+        settingsButton.Click += (_, _) => ShowSettings();
+        LoadPreferences();
 
         noteList.ItemHeight = TextRenderer.MeasureText("Ag", Font).Height * 3 + 26;
         noteList.DrawItem += DrawNoteCard;
@@ -88,6 +98,7 @@ internal sealed class NotesForm : Form
         autoSave.Tick += (_, _) => SaveNotes();
         Disposed += (_, _) =>
         {
+            SystemEvents.UserPreferenceChanged -= SystemPreferenceChanged;
             autoSave.Dispose();
             listHeading.Dispose();
             cardTitle.Dispose();
@@ -101,6 +112,7 @@ internal sealed class NotesForm : Form
         };
         FormClosing += (_, args) => args.Cancel = !ResolveChanges() || !RememberWindowPlacements(notes, this);
         FormClosed += (_, _) => CloseEditors();
+        SystemEvents.UserPreferenceChanged += SystemPreferenceChanged;
         LoadNotes();
     }
 
@@ -108,8 +120,15 @@ internal sealed class NotesForm : Form
     {
         if (keyData == (Keys.Control | Keys.F))
         {
+            if (settings.Visible) ShowNotes();
             search.Focus();
             search.SelectAll();
+            return true;
+        }
+
+        if (keyData == Keys.Escape && settings.Visible)
+        {
+            ShowNotes();
             return true;
         }
 
@@ -136,22 +155,14 @@ internal sealed class NotesForm : Form
         var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
         actions.Controls.AddRange([add, save, reload]);
         foreach (Button button in actions.Controls) StyleButton(button);
-        layout.Controls.Add(heading, 0, 0);
+        var header = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.Controls.Add(heading, 0, 0);
+        header.Controls.Add(settingsButton, 1, 0);
+        layout.Controls.Add(header, 0, 0);
         layout.Controls.Add(actions, 0, 1);
-        add.BackColor = Color.FromArgb(211, 198, 228);
-        add.ForeColor = Ink;
-        add.FlatAppearance.MouseOverBackColor = Color.FromArgb(222, 211, 237);
-        add.FlatAppearance.MouseDownBackColor = Color.FromArgb(195, 180, 214);
-        foreach (Button button in new[] { save, reload, clearSearch })
-        {
-            StyleButton(button);
-            button.BackColor = SearchSurface;
-            button.ForeColor = Ink;
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(225, 217, 221);
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(215, 206, 217);
-        }
 
-        var searchRow = new TableLayoutPanel { Height = 38, BackColor = SearchSurface, Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(7, 4, 7, 4) };
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 24));
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -160,14 +171,13 @@ internal sealed class NotesForm : Form
         magnifier.Paint += (_, args) =>
         {
             args.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var pen = new Pen(MutedInk, 1.5f);
+            using var pen = new Pen(theme.MutedInk, 1.5f);
             int y = Math.Max(0, (magnifier.Height - 14) / 2);
             args.Graphics.DrawEllipse(pen, 4, y, 9, 9);
             args.Graphics.DrawLine(pen, 12, y + 8, 17, y + 13);
         };
         magnifier.Click += (_, _) => search.Focus();
         var searchInput = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(2, 6, 4, 0) };
-        var searchHint = new Label { Text = "Search notes", ForeColor = MutedInk, Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft };
         searchInput.Controls.Add(search);
         searchInput.Controls.Add(searchHint);
         searchHint.BringToFront();
@@ -189,6 +199,83 @@ internal sealed class NotesForm : Form
         layout.Controls.Add(results, 0, 3);
         layout.Controls.Add(status, 0, 4);
         return layout;
+    }
+
+    private void ShowSettings()
+    {
+        workspace.Hide();
+        settings.Show();
+        settings.BringToFront();
+        settings.FocusBack();
+    }
+
+    private void ShowNotes()
+    {
+        settings.Hide();
+        workspace.Show();
+        settingsButton.Focus();
+    }
+
+    private void LoadPreferences()
+    {
+        try
+        {
+            preferences = store.LoadPreferences();
+        }
+        catch (Exception error) when (IsStorageError(error))
+        {
+            settings.SetNotice($"Could not load settings. {error.Message}");
+        }
+
+        ApplyTheme();
+    }
+
+    private void ChangePreferences(AppPreferences updated)
+    {
+        if (preferences == updated) return;
+        settings.SetNotice(null);
+        try
+        {
+            store.SavePreferences(updated);
+            preferences = updated;
+        }
+        catch (Exception error) when (IsStorageError(error))
+        {
+            settings.SetNotice($"Could not save settings. {error.Message}");
+        }
+
+        ApplyTheme();
+    }
+
+    private void SystemPreferenceChanged(object? sender, UserPreferenceChangedEventArgs args)
+    {
+        if (!IsHandleCreated || Disposing || IsDisposed) return;
+        BeginInvoke(() =>
+        {
+            if (!IsDisposed && preferences.Theme == ThemePreference.System) ApplyTheme();
+        });
+    }
+
+    private void ApplyTheme()
+    {
+        theme = NotesTheme.Resolve(preferences.Theme);
+        BackColor = workspace.BackColor = noteList.BackColor = theme.Surface;
+        ForeColor = workspace.ForeColor = noteList.ForeColor = search.ForeColor = theme.Ink;
+        search.BackColor = searchRow.BackColor = theme.Control;
+        searchHint.ForeColor = theme.MutedInk;
+        foreach (Button button in new[] { add, save, reload, clearSearch, settingsButton })
+        {
+            StyleButton(button);
+            bool primary = button == add;
+            button.BackColor = primary ? theme.Primary : theme.Control;
+            button.ForeColor = primary ? NotesTheme.PrimaryInk : theme.Ink;
+            button.FlatAppearance.MouseOverBackColor = primary ? theme.Primary : theme.Hover;
+            button.FlatAppearance.MouseDownBackColor = primary ? theme.Primary : theme.Pressed;
+        }
+        clearSearch.Padding = new Padding(4, 0, 4, 0);
+        searchRow.Invalidate(true);
+        noteList.Invalidate();
+        settings.Apply(theme, preferences);
     }
 
     internal static void StyleButton(ButtonBase button)
@@ -213,12 +300,7 @@ internal sealed class NotesForm : Form
 
         bool focused = noteList.Focused && args.State.HasFlag(DrawItemState.Selected);
         Color accent = NotePalette.Resolve(note.Accent).Color;
-        int weight = focused ? 50 : 35;
-        Color paper = Color.FromArgb(
-            (accent.R * weight + 255 * (100 - weight)) / 100,
-            (accent.G * weight + 255 * (100 - weight)) / 100,
-            (accent.B * weight + 255 * (100 - weight)) / 100);
-        using var background = new SolidBrush(paper);
+        using var background = new SolidBrush(theme.NotePaper(accent, focused));
         using var shape = new GraphicsPath();
         const int diameter = 16;
         shape.AddArc(card.Left, card.Top, diameter, diameter, 180, 90);
@@ -237,20 +319,20 @@ internal sealed class NotesForm : Form
         const TextFormatFlags singleLine = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
         int dateWidth = Math.Min(text.Width / 2, TextRenderer.MeasureText(date, cardDate).Width);
         TextRenderer.DrawText(args.Graphics, date, cardDate,
-            new Rectangle(text.Right - dateWidth, text.Top + 2, dateWidth, line), MutedInk, singleLine | TextFormatFlags.Right);
+            new Rectangle(text.Right - dateWidth, text.Top + 2, dateWidth, line), theme.MutedInk, singleLine | TextFormatFlags.Right);
         int firstRowWidth = Math.Max(0, text.Width - dateWidth - 8);
         bool hasTitle = !string.IsNullOrWhiteSpace(note.Title);
         if (hasTitle)
         {
             DrawSearchText(args.Graphics, NoteSearch.GetSnippet(note.Title, searchQuery, 110),
-                new Rectangle(text.Left, text.Top, firstRowWidth, line), cardTitle, Ink, singleLine: true);
+                new Rectangle(text.Left, text.Top, firstRowWidth, line), cardTitle, theme.Ink, singleLine: true);
         }
 
         string preview = note.Content.Length == 0 && NoteImage.ContainsPicture(note.RichText) ? "Image" : note.Content;
         int previewTop = hasTitle ? text.Top + line + 2 : text.Top;
         int previewWidth = hasTitle ? text.Width : firstRowWidth;
         DrawSearchText(args.Graphics, NoteSearch.GetSnippet(preview, searchQuery, 220),
-            new Rectangle(text.Left, previewTop, previewWidth, text.Bottom - previewTop), Font, Ink, singleLine: false);
+            new Rectangle(text.Left, previewTop, previewWidth, text.Bottom - previewTop), Font, theme.Ink, singleLine: false);
     }
 
     private void DrawSearchText(Graphics graphics, string text, Rectangle bounds, Font font, Color foreground, bool singleLine)
@@ -274,7 +356,7 @@ internal sealed class NotesForm : Form
                 start = index + length;
             }
 
-            using var highlight = new SolidBrush(Color.FromArgb(247, 214, 128));
+            using var highlight = new SolidBrush(theme.Highlight);
             // GDI+ accepts at most 32 measured character ranges at a time.
             foreach (var batch in matches.Chunk(32))
             {
@@ -447,7 +529,7 @@ internal sealed class NotesForm : Form
 
     private void DeleteNote(NoteEditorForm editor, Note note)
     {
-        if (MessageBox.Show(editor, $"Delete “{note.DisplayTitle}”?", "Delete note", MessageBoxButtons.YesNo,
+        if (preferences.ConfirmBeforeDeleting && MessageBox.Show(editor, $"Delete “{note.DisplayTitle}”?", "Delete note", MessageBoxButtons.YesNo,
             MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
         int index = notes.IndexOf(note);
