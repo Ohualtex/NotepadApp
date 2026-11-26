@@ -7,7 +7,7 @@ internal static class NoteSearch
     private const string Ellipsis = "…";
 
     public static bool Matches(Note note, string query) =>
-        query.Length == 0 || Find(note.DisplayTitle, query, 0, out _) >= 0 || Find(note.Content, query, 0, out _) >= 0;
+        query.Length == 0 || Find(note.Title, query, 0, out _) >= 0 || Find(note.Content, query, 0, out _) >= 0;
 
     public static string GetSnippet(string value, string query, int limit)
     {
