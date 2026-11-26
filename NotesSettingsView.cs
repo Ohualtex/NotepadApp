@@ -4,7 +4,11 @@ namespace NotepadApp;
 
 internal sealed class NotesSettingsView : UserControl
 {
-    private readonly Button back = new() { Text = "←", AccessibleName = "Back to notes", Size = new Size(36, 32) };
+    private readonly Button back = new() { Text = "←", AccessibleName = "Back to notes", Dock = DockStyle.Fill };
+    private readonly Button close = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
+    private readonly Label heading = new() { Text = "Settings", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(7, 0, 0, 0) };
+    private readonly Button save;
+    private readonly Button reload;
     private readonly TableLayoutPanel themeOptions = new() { AutoSize = true, ColumnCount = 3, RowCount = 1, Dock = DockStyle.Top };
     private readonly Dictionary<ThemePreference, RadioButton> themeButtons = [];
     private readonly PreferenceToggle confirmDelete = new()
@@ -13,18 +17,28 @@ internal sealed class NotesSettingsView : UserControl
         Anchor = AnchorStyles.Right
     };
     private readonly Font headingFont = new("Segoe UI", 14, FontStyle.Bold);
-    private readonly Label storage = new() { Text = "Preferences are stored on this device.", AutoSize = true, Margin = new Padding(3, 18, 3, 0) };
+    private readonly Font headerIconFont = new("Segoe UI Symbol", 15);
     private readonly Label notice = new() { AutoSize = true, Visible = false, MaximumSize = new Size(275, 0) };
     private bool updating;
 
-    public NotesSettingsView(Action goBack, Action<ThemePreference> changeTheme, Action<bool> changeConfirmation)
+    public NotesSettingsView(Action goBack, Action closeApplication, Button save, Button reload,
+        Action<ThemePreference> changeTheme, Action<bool> changeConfirmation)
     {
+        this.save = save;
+        this.reload = reload;
         var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(14) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        var header = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(0, 0, 0, 14) };
-        header.Controls.Add(back);
-        header.Controls.Add(new Label { Text = "Settings", Font = headingFont, AutoSize = true, Margin = new Padding(8, 6, 0, 0) });
+        var header = new TableLayoutPanel { Height = 38, Dock = DockStyle.Top, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, 11) };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
+        header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        heading.Font = headingFont;
+        back.Font = close.Font = headerIconFont;
+        header.Controls.Add(back, 0, 0);
+        header.Controls.Add(heading, 1, 0);
+        header.Controls.Add(close, 2, 0);
         layout.Controls.Add(header, 0, 0);
         layout.Controls.Add(new Label { Text = "Theme", AutoSize = true, Margin = new Padding(3, 0, 3, 6) }, 0, 1);
         foreach (ThemePreference mode in Enum.GetValues<ThemePreference>())
@@ -56,10 +70,14 @@ internal sealed class NotesSettingsView : UserControl
         deleteRow.Controls.Add(new Label { Text = "Confirm before deleting", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoSize = true }, 0, 0);
         deleteRow.Controls.Add(confirmDelete, 1, 0);
         layout.Controls.Add(deleteRow, 0, 4);
-        layout.Controls.Add(storage, 0, 5);
-        layout.Controls.Add(notice, 0, 6);
+        layout.Controls.Add(new Label { Text = "Local storage", AutoSize = true, Margin = new Padding(3, 22, 3, 4) }, 0, 5);
+        var maintenance = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
+        maintenance.Controls.AddRange([save, reload]);
+        layout.Controls.Add(maintenance, 0, 6);
+        layout.Controls.Add(notice, 0, 7);
 
         back.Click += (_, _) => goBack();
+        close.Click += (_, _) => closeApplication();
         confirmDelete.CheckedChanged += (_, _) =>
         {
             if (!updating) changeConfirmation(confirmDelete.Checked);
@@ -67,8 +85,14 @@ internal sealed class NotesSettingsView : UserControl
 
         panel.Controls.Add(layout);
         Controls.Add(panel);
-        Disposed += (_, _) => headingFont.Dispose();
+        Disposed += (_, _) =>
+        {
+            headingFont.Dispose();
+            headerIconFont.Dispose();
+        };
     }
+
+    public Control Caption => heading;
 
     public void FocusBack() => back.Focus();
 
@@ -79,8 +103,12 @@ internal sealed class NotesSettingsView : UserControl
         {
             BackColor = theme.Surface;
             ForeColor = theme.Ink;
-            storage.ForeColor = theme.MutedInk;
             StyleAction(back, theme);
+            StyleAction(close, theme);
+            back.BackColor = close.BackColor = theme.Surface;
+            back.Padding = close.Padding = Padding.Empty;
+            StyleAction(save, theme);
+            StyleAction(reload, theme);
             foreach (var (mode, button) in themeButtons)
             {
                 button.Checked = mode == preferences.Theme;

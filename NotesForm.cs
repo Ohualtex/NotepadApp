@@ -4,13 +4,15 @@ using Microsoft.Win32;
 
 namespace NotepadApp;
 
-internal sealed class NotesForm : Form
+internal sealed class NotesForm : ResizableNoteWindow
 {
     private AppPreferences preferences = new();
     private NotesTheme theme = NotesTheme.Resolve(ThemePreference.Light);
     private readonly Control workspace;
     private readonly NotesSettingsView settings;
-    private readonly Button settingsButton = new() { Text = "⚙", AccessibleName = "Settings", AutoSize = true, Anchor = AnchorStyles.Right };
+    private readonly Button settingsButton = new() { Text = "⚙", AccessibleName = "Settings", Dock = DockStyle.Fill };
+    private readonly Button closeButton = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
+    private readonly Font windowIconFont = new("Segoe UI Symbol", 15);
     private readonly TableLayoutPanel searchRow = new() { Height = 38, Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(7, 4, 7, 4) };
     private readonly Label searchHint = new() { Text = "Search notes", Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft };
     private readonly Font listHeading = new("Segoe UI", 14, FontStyle.Bold);
@@ -28,7 +30,7 @@ internal sealed class NotesForm : Form
         DisplayMember = nameof(Note.DisplayTitle),
         AccessibleName = "Notes"
     };
-    private readonly Button add = new() { Text = "+ New note", AutoSize = true };
+    private readonly Button add = new() { Text = "+", AccessibleName = "New note", Dock = DockStyle.Fill };
     private readonly Button save = new() { Text = "Save all", AutoSize = true };
     private readonly Button reload = new() { Text = "Reload", AutoSize = true };
     private readonly TextBox search = new()
@@ -52,13 +54,11 @@ internal sealed class NotesForm : Form
         Text = "NotepadApp";
         Font = new Font("Segoe UI", 10);
 
-        ClientSize = new Size(420, 570);
+        Size = new Size(420, 570);
         MinimumSize = new Size(320, 360);
-        MinimizeBox = false;
-        MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         workspace = BuildWorkspace();
-        settings = new NotesSettingsView(ShowNotes,
+        settings = new NotesSettingsView(ShowNotes, Close, save, reload,
             mode => ChangePreferences(preferences with { Theme = mode }),
             confirm => ChangePreferences(preferences with { ConfirmBeforeDeleting = confirm }))
         {
@@ -67,7 +67,9 @@ internal sealed class NotesForm : Form
         };
         Controls.Add(workspace);
         Controls.Add(settings);
+        ConfigureCaption(settings.Caption);
         settingsButton.Click += (_, _) => ShowSettings();
+        closeButton.Click += (_, _) => Close();
         LoadPreferences();
 
         noteList.ItemHeight = TextRenderer.MeasureText("Ag", Font).Height * 3 + 26;
@@ -100,14 +102,20 @@ internal sealed class NotesForm : Form
         {
             SystemEvents.UserPreferenceChanged -= SystemPreferenceChanged;
             autoSave.Dispose();
+            windowIconFont.Dispose();
             listHeading.Dispose();
             cardTitle.Dispose();
             cardDate.Dispose();
         };
         add.Click += (_, _) => AddNote();
-        save.Click += (_, _) => SaveNotes();
+        save.Click += (_, _) =>
+        {
+            ShowNotes();
+            SaveNotes();
+        };
         reload.Click += (_, _) =>
         {
+            ShowNotes();
             if (ResolveChanges() && RememberWindowPlacements(notes, this)) LoadNotes();
         };
         FormClosing += (_, args) => args.Cancel = !ResolveChanges() || !RememberWindowPlacements(notes, this);
@@ -143,25 +151,31 @@ internal sealed class NotesForm : Form
 
     private Control BuildWorkspace()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(14) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(10) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var heading = new Label { Text = "Notes", Font = listHeading, AutoSize = true, Margin = new Padding(3, 0, 3, 8) };
-        var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
-        actions.Controls.AddRange([add, save, reload]);
-        foreach (Button button in actions.Controls) StyleButton(button);
-        var header = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+        var heading = new Label { Text = "Notes", Font = listHeading, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(7, 0, 0, 0) };
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0, 0, 0, 10) };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.Controls.Add(heading, 0, 0);
-        header.Controls.Add(settingsButton, 1, 0);
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
+        header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        header.Controls.Add(add, 0, 0);
+        header.Controls.Add(heading, 1, 0);
+        header.Controls.Add(settingsButton, 2, 0);
+        header.Controls.Add(closeButton, 3, 0);
+        ConfigureCaption(heading);
+        foreach (Button button in new[] { add, settingsButton, closeButton })
+        {
+            button.Font = windowIconFont;
+            button.Margin = new Padding(1);
+        }
         layout.Controls.Add(header, 0, 0);
-        layout.Controls.Add(actions, 0, 1);
 
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 24));
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -191,13 +205,13 @@ internal sealed class NotesForm : Form
         searchRow.Controls.Add(magnifier, 0, 0);
         searchRow.Controls.Add(searchInput, 1, 0);
         searchRow.Controls.Add(clearSearch, 2, 0);
-        layout.Controls.Add(searchRow, 0, 2);
+        layout.Controls.Add(searchRow, 0, 1);
 
         var results = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
         results.Controls.Add(noteList);
         results.Controls.Add(noResults);
-        layout.Controls.Add(results, 0, 3);
-        layout.Controls.Add(status, 0, 4);
+        layout.Controls.Add(results, 0, 2);
+        layout.Controls.Add(status, 0, 3);
         return layout;
     }
 
@@ -263,16 +277,17 @@ internal sealed class NotesForm : Form
         ForeColor = workspace.ForeColor = noteList.ForeColor = search.ForeColor = theme.Ink;
         search.BackColor = searchRow.BackColor = theme.Control;
         searchHint.ForeColor = theme.MutedInk;
-        foreach (Button button in new[] { add, save, reload, clearSearch, settingsButton })
+        foreach (Button button in new[] { add, clearSearch, settingsButton, closeButton })
         {
             StyleButton(button);
             bool primary = button == add;
-            button.BackColor = primary ? theme.Primary : theme.Control;
+            button.BackColor = primary ? theme.Primary : button == clearSearch ? theme.Control : theme.Surface;
             button.ForeColor = primary ? NotesTheme.PrimaryInk : theme.Ink;
             button.FlatAppearance.MouseOverBackColor = primary ? theme.Primary : theme.Hover;
             button.FlatAppearance.MouseDownBackColor = primary ? theme.Primary : theme.Pressed;
         }
         clearSearch.Padding = new Padding(4, 0, 4, 0);
+        add.Padding = settingsButton.Padding = closeButton.Padding = Padding.Empty;
         searchRow.Invalidate(true);
         noteList.Invalidate();
         settings.Apply(theme, preferences);

@@ -55,7 +55,7 @@ internal class ResizableNoteWindow : Form
         };
     }
 
-    protected void ConfigureCaption(Control control, Action editTitle)
+    protected void ConfigureCaption(Control control, Action? clickCaption = null)
     {
         Point pointerStart = Point.Empty;
         Point windowStart = Point.Empty;
@@ -90,7 +90,7 @@ internal class ResizableNoteWindow : Form
             if (args.Button != MouseButtons.Left || !pressed) return;
             pressed = false;
             control.Capture = false;
-            if (!dragging) editTitle();
+            if (!dragging) clickCaption?.Invoke();
         };
     }
 }
