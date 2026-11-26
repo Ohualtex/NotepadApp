@@ -22,7 +22,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private readonly NotePreviewRenderer previewRenderer = new();
     private readonly System.Windows.Forms.Timer autoSave = new() { Interval = 700 };
     private readonly Dictionary<Guid, NoteEditorForm> editors = [];
-    private readonly ListBox noteList = new()
+    private readonly BufferedNoteList noteList = new()
     {
         Dock = DockStyle.Fill,
         BorderStyle = BorderStyle.None,
@@ -326,9 +326,17 @@ internal sealed class NotesForm : ResizableNoteWindow
     private void SetCardHover(int index, bool pressed)
     {
         if (hoveredCard == index && cardPressed == pressed) return;
+        int previous = hoveredCard;
         hoveredCard = index;
         cardPressed = pressed;
-        noteList.Invalidate();
+        InvalidateCard(previous);
+        if (index != previous) InvalidateCard(index);
+    }
+
+    private void InvalidateCard(int index)
+    {
+        if (index >= 0 && index < noteList.Items.Count)
+            noteList.Invalidate(noteList.GetItemRectangle(index));
     }
 
     private void DrawNoteCard(object? sender, DrawItemEventArgs args)

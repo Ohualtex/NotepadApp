@@ -7,7 +7,11 @@ internal sealed class NoteButton : Button
 {
     private readonly NoteButtonSurface surface;
 
-    public NoteButton() => surface = new NoteButtonSurface(this);
+    public NoteButton()
+    {
+        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+        surface = new NoteButtonSurface(this);
+    }
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Action<Graphics, Color>? PaintIcon { get; set; }
@@ -19,7 +23,11 @@ internal sealed class NoteToggleButton : CheckBox
 {
     private readonly NoteButtonSurface surface;
 
-    public NoteToggleButton() => surface = new NoteButtonSurface(this);
+    public NoteToggleButton()
+    {
+        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+        surface = new NoteButtonSurface(this);
+    }
 
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Action<Graphics, Color>? PaintIcon { get; set; }
@@ -31,7 +39,11 @@ internal sealed class NoteRadioButton : RadioButton
 {
     private readonly NoteButtonSurface surface;
 
-    public NoteRadioButton() => surface = new NoteButtonSurface(this);
+    public NoteRadioButton()
+    {
+        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+        surface = new NoteButtonSurface(this);
+    }
 
     protected override void OnPaint(PaintEventArgs args) => surface.Paint(args.Graphics, Checked, ShowFocusCues, null);
 }

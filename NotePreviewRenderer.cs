@@ -15,31 +15,35 @@ internal sealed class NotePreviewRenderer : IDisposable
     {
         if (string.IsNullOrEmpty(note.RichText) || bounds.Width <= 0 || bounds.Height <= 0) return false;
 
-        var key = new PreviewKey(note.Content, note.RichText, query, bounds.Size, target.DpiX, target.DpiY, font, theme.Ink, theme.Highlight, paper);
+        var key = new PreviewKey(note.Content, note.RichText, query, bounds.Size, target.DpiX, target.DpiY, font, theme.Ink, theme.Highlight);
         if (!cache.TryGetValue(note.Id, out var entry) || entry.Key != key)
         {
-            if (entry is not null)
-            {
-                cache.Remove(note.Id);
-                entry.Image?.Dispose();
-            }
+            if (entry is not null) entry.ClearImages();
             else if (cache.Count >= MaxCachedNotes) ClearCache();
 
-            entry = new CacheEntry(key, Render(note, key));
+            entry = new CacheEntry(key);
             cache[note.Id] = entry;
         }
 
-        if (entry.Image is null) return false;
-        target.DrawImageUnscaled(entry.Image, bounds.Location);
+        if (!entry.Images.TryGetValue(paper, out Bitmap? image))
+        {
+            // Keep the normal, hover, and selected/pressed paper variants.
+            if (entry.Images.Count >= 3) entry.ClearImages();
+            image = Render(note, key, paper);
+            entry.Images.Add(paper, image);
+        }
+
+        if (image is null) return false;
+        target.DrawImageUnscaled(image, bounds.Location);
         return true;
     }
 
-    private Bitmap? Render(Note note, PreviewKey key)
+    private Bitmap? Render(Note note, PreviewKey key, Color paper)
     {
         editor ??= new RichTextBox { BorderStyle = BorderStyle.None, DetectUrls = false };
         editor.Font = key.Font;
         editor.ForeColor = key.Ink;
-        editor.BackColor = key.Paper;
+        editor.BackColor = paper;
 
         int widthTwips = ToTwips(key.Size.Width, key.DpiX);
         int heightTwips = ToTwips(key.Size.Height, key.DpiY);
@@ -58,15 +62,15 @@ internal sealed class NotePreviewRenderer : IDisposable
         {
             bitmap.SetResolution(key.DpiX, key.DpiY);
             using var graphics = Graphics.FromImage(bitmap);
-            graphics.Clear(key.Paper);
+            graphics.Clear(paper);
             int indent = start > 0 ? TextRenderer.MeasureText("…", key.Font).Width : 0;
             var page = new NativeRectangle(0, 0, widthTwips, heightTwips);
             var area = new NativeRectangle(ToTwips(indent, key.DpiX), 0, widthTwips, heightTwips);
             int drawnUntil = RenderRange(editor, graphics, page, area, start, length);
             if (start > 0)
-                DrawEllipsis(graphics, key, left: true);
+                DrawEllipsis(graphics, key, paper, left: true);
             if (drawnUntil < length)
-                DrawEllipsis(graphics, key, left: false);
+                DrawEllipsis(graphics, key, paper, left: false);
             return bitmap;
         }
         catch
@@ -98,14 +102,14 @@ internal sealed class NotePreviewRenderer : IDisposable
         return start;
     }
 
-    private static void DrawEllipsis(Graphics graphics, PreviewKey key, bool left)
+    private static void DrawEllipsis(Graphics graphics, PreviewKey key, Color paper, bool left)
     {
         const string text = "…";
         const TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
         Size size = TextRenderer.MeasureText(text, key.Font, Size.Empty, flags);
         var bounds = new Rectangle(left ? 0 : Math.Max(0, key.Size.Width - size.Width - 1),
             left ? 0 : Math.Max(0, key.Size.Height - size.Height), size.Width + 1, size.Height);
-        using var background = new SolidBrush(key.Paper);
+        using var background = new SolidBrush(paper);
         graphics.FillRectangle(background, bounds);
         TextRenderer.DrawText(graphics, text, key.Font, bounds, key.Ink, flags);
     }
@@ -138,7 +142,7 @@ internal sealed class NotePreviewRenderer : IDisposable
 
     private void ClearCache()
     {
-        foreach (var entry in cache.Values) entry.Image?.Dispose();
+        foreach (var entry in cache.Values) entry.ClearImages();
         cache.Clear();
     }
 
@@ -174,6 +178,16 @@ internal sealed class NotePreviewRenderer : IDisposable
         public int End;
     }
 
-    private sealed record PreviewKey(string PlainText, string RichText, string Query, Size Size, float DpiX, float DpiY, Font Font, Color Ink, Color Highlight, Color Paper);
-    private sealed record CacheEntry(PreviewKey Key, Bitmap? Image);
+    private sealed record PreviewKey(string PlainText, string RichText, string Query, Size Size, float DpiX, float DpiY, Font Font, Color Ink, Color Highlight);
+    private sealed class CacheEntry(PreviewKey key)
+    {
+        public PreviewKey Key { get; } = key;
+        public Dictionary<Color, Bitmap?> Images { get; } = [];
+
+        public void ClearImages()
+        {
+            foreach (var image in Images.Values) image?.Dispose();
+            Images.Clear();
+        }
+    }
 }
