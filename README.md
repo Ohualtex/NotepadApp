@@ -1,28 +1,49 @@
 # NotepadApp
 
-A Windows Forms app for writing and organizing local notes.
+NotepadApp is a Windows desktop app for keeping sticky notes. Write in independent post-it windows, find notes from a searchable list, and keep everything on your device.
+
+## Screenshot
+
+![NotepadApp showing the notes list alongside an active and an inactive post-it](docs/screenshots/notepadapp.png)
 
 ## Run from source
 
-Install the .NET 10 SDK on Windows. From the repository root, run:
+Install the .NET 10 SDK on Windows. From the repository root, run
 
 ```powershell
 dotnet run --project NotepadApp.csproj
 ```
 
-The project uses C#, Windows Forms, `System.IO`, and `System.Text.Json`. It has no external NuGet packages.
+The app uses C#, Windows Forms, and the .NET standard library.
 
 ## Use the app
 
-- Select **+ New note** to open a note in its own window. Select a card to reopen a note or focus its open window. Closing a note keeps it in the list.
-- Search by title or text. **Ctrl+F** focuses the search box, and **Esc** clears it while the box has focus. Matching text is highlighted in the cards.
-- Use the editor toolbar to apply bold, italic, underline, strikethrough, or bullets. Select **Image** to insert a picture at the cursor.
-- Use **Options** in the editor to choose the note's accent color or delete the note. Deleting asks for confirmation.
-- Notes save automatically shortly after a change. Use **Save all** to save immediately or retry after an error.
-- Select **Export .txt** to save the selected note's title and plain text as UTF-8.
+- Select **+** in the list or a post-it to create a note. The new note opens ready to type. To add an optional title, click the top bar or press **F2**.
+- Drag a post-it by its top bar and resize it from its edges. Each note remembers its own position and size. The top bar and formatting toolbar appear when the note has focus.
+- Select a card to open its note or bring it forward. Closing the list leaves open notes on your desktop. Use **⋯ → Notes list** from a post-it to bring back the list.
+- Search by title or text with **Ctrl+F**. Matches are highlighted in the cards. Press **Esc** while the search box has focus to clear it.
+- Use the formatting toolbar for bold, italic, underline, strikethrough, and bullets. Use the image icon to insert a picture at the cursor.
+- Open **⋯** for note colors, **Save all**, **Export .txt**, and **Delete note**. The export contains a title line and the note's plain text in UTF-8.
+- Open the gear in the list to choose **Light**, **Dark**, or **System** and control whether deleting a note asks for confirmation. **Local storage** contains **Save all** and **Reload**.
 
 ## Local storage
 
-Notes are stored in `%LOCALAPPDATA%\NotepadApp\notes.json` and loaded at startup. Their colors, formatting, embedded images, and individual window positions and sizes are saved locally. The app shows the creation and last edit times in each editor.
+Changes save automatically after a short pause. Use **Save all** to write changes immediately or retry after an error.
 
-A missing file opens an empty list. If the file cannot be read, the app displays an error and disables saving. Repair the file or move it to a backup location, then select **Reload**.
+| File | Contents |
+| --- | --- |
+| `%LOCALAPPDATA%\NotepadApp\notes.json` | Note text, formatting, embedded images, colors, timestamps, and window positions and sizes |
+| `%LOCALAPPDATA%\NotepadApp\settings.json` | Theme and delete confirmation preferences |
+
+If the notes file cannot be read, NotepadApp reports the error and disables saving. Repair the file or move it to a backup location, then choose **Settings → Local storage → Reload**.
+
+## Project structure
+
+| Files | Role |
+| --- | --- |
+| `Program.cs`, `NotepadApp.csproj` | Application entry point and WinForms project settings |
+| `NotesForm.cs`, `NoteSearch.cs` | Note list, search, and coordination of open editors |
+| `NoteEditorForm.cs`, `NoteOptionsPanel.cs`, `ResizableNoteWindow.cs` | Post-it editor, in-note panel, and resizable window frame |
+| `NotesSettingsView.cs`, `AppPreferences.cs`, `NotesTheme.cs` | Settings UI, user preferences, and light/dark palettes |
+| `Note.cs`, `NoteWindowPlacement.cs`, `NoteStore.cs` | Note model, saved window geometry, JSON persistence, and text export |
+| `NoteButtons.cs`, `NotePalette.cs`, `RichTextFormatting.cs`, `NoteImage.cs` | Shared controls, note colors, text formatting, and image embedding |
