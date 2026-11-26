@@ -4,8 +4,8 @@ namespace NotepadApp;
 
 internal sealed class NotesSettingsView : UserControl
 {
-    private readonly Button back = new() { Text = "←", AccessibleName = "Back to notes", Dock = DockStyle.Fill };
-    private readonly Button close = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
+    private readonly NoteButton back = new() { Text = "←", AccessibleName = "Back to notes", Dock = DockStyle.Fill };
+    private readonly NoteButton close = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
     private readonly Label heading = new() { Text = "Settings", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(7, 0, 0, 0) };
     private readonly Button save;
     private readonly Button reload;
@@ -45,7 +45,7 @@ internal sealed class NotesSettingsView : UserControl
         {
             int index = themeButtons.Count;
             themeOptions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 3));
-            var button = new RadioButton
+            var button = new NoteRadioButton
             {
                 Text = mode.ToString(),
                 Appearance = Appearance.Button,
@@ -136,8 +136,8 @@ internal sealed class NotesSettingsView : UserControl
         button.BackColor = selected ? theme.Primary : theme.Control;
         button.ForeColor = selected ? NotesTheme.PrimaryInk : theme.Ink;
         button.FlatAppearance.CheckedBackColor = theme.Primary;
-        button.FlatAppearance.MouseOverBackColor = selected ? theme.Primary : theme.Hover;
-        button.FlatAppearance.MouseDownBackColor = selected ? theme.Primary : theme.Pressed;
+        button.FlatAppearance.MouseOverBackColor = selected ? NoteButtonSurface.Blend(theme.Primary, Color.White, 13) : theme.Hover;
+        button.FlatAppearance.MouseDownBackColor = selected ? NoteButtonSurface.Blend(theme.Primary, Color.Black, 12) : theme.Pressed;
     }
 
     private sealed class PreferenceToggle : CheckBox
@@ -176,11 +176,7 @@ internal sealed class NotesSettingsView : UserControl
             int x = Checked ? track.Right - knob - 3 : track.Left + 3;
             args.Graphics.FillEllipse(pin, x, track.Top + 3, knob, knob);
 
-            if (Focused && ShowFocusCues)
-            {
-                using var focus = new Pen(theme.MutedInk);
-                args.Graphics.DrawRectangle(focus, 0, 0, Width - 1, Height - 1);
-            }
+            if (Focused && ShowFocusCues) NoteButtonSurface.DrawFocusMarker(args.Graphics, ClientSize, theme.MutedInk);
         }
     }
 }

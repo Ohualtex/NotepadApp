@@ -31,13 +31,13 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Visible = false };
     private readonly Panel writingArea = new() { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(12, 6, 9, 4) };
     private readonly NoteOptionsPanel drawer;
-    private readonly Button newNote = new() { Text = "+", AccessibleName = "New note", Dock = DockStyle.Fill };
-    private readonly Button options = new() { Text = "⋯", AccessibleName = "Note options", Dock = DockStyle.Fill };
-    private readonly Button close = new() { Text = "×", AccessibleName = "Close note", Dock = DockStyle.Fill };
+    private readonly NoteButton newNote = new() { Text = "+", AccessibleName = "New note", Dock = DockStyle.Fill };
+    private readonly NoteButton options = new() { Text = "⋯", AccessibleName = "Note options", Dock = DockStyle.Fill };
+    private readonly NoteButton close = new() { Text = "×", AccessibleName = "Close note", Dock = DockStyle.Fill };
     private readonly ToolTip formatToolTip = new();
     private readonly Dictionary<FontStyle, CheckBox> styleButtons = [];
-    private readonly CheckBox bullets = CreateFormatButton("", "Bulleted list");
-    private readonly Button insertImage = new() { AccessibleName = "Insert image" };
+    private readonly NoteToggleButton bullets = CreateFormatButton("", "Bulleted list");
+    private readonly NoteButton insertImage = new() { AccessibleName = "Insert image" };
     private readonly FlowLayoutPanel formatTools = new() { Dock = DockStyle.Fill, AutoSize = true };
 
     public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string, string?> edit, Func<bool> saveNotes,
@@ -325,7 +325,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         content.SelectedRtf = picture;
     }
 
-    private static CheckBox CreateFormatButton(string label, string accessibleName) => new()
+    private static NoteToggleButton CreateFormatButton(string label, string accessibleName) => new()
     {
         Text = label,
         AccessibleName = accessibleName,
@@ -376,30 +376,30 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             formatToolTip.SetToolTip(button, button.AccessibleName);
         }
 
-        bullets.Paint += (_, args) =>
+        bullets.PaintIcon = (graphics, ink) =>
         {
-            using var brush = new SolidBrush(bullets.ForeColor);
-            using var pen = new Pen(bullets.ForeColor);
+            using var brush = new SolidBrush(ink);
+            using var pen = new Pen(ink);
             int x = bullets.Width / 2 - 8;
             int y = bullets.Height / 2 - 5;
             for (int row = 0; row < 3; row++)
             {
-                args.Graphics.FillEllipse(brush, x, y + row * 5, 2, 2);
-                args.Graphics.DrawLine(pen, x + 5, y + row * 5 + 1, x + 16, y + row * 5 + 1);
+                graphics.FillEllipse(brush, x, y + row * 5, 2, 2);
+                graphics.DrawLine(pen, x + 5, y + row * 5 + 1, x + 16, y + row * 5 + 1);
             }
         };
 
         NotesForm.StyleButton(insertImage);
         insertImage.Size = new Size(36, 30);
         insertImage.Padding = Padding.Empty;
-        insertImage.Paint += (_, args) =>
+        insertImage.PaintIcon = (graphics, ink) =>
         {
-            using var pen = new Pen(insertImage.ForeColor);
+            using var pen = new Pen(ink);
             int x = insertImage.Width / 2 - 8;
             int y = insertImage.Height / 2 - 6;
-            args.Graphics.DrawRectangle(pen, x, y, 16, 12);
-            args.Graphics.DrawEllipse(pen, x + 10, y + 2, 2, 2);
-            args.Graphics.DrawLines(pen,
+            graphics.DrawRectangle(pen, x, y, 16, 12);
+            graphics.DrawEllipse(pen, x + 10, y + 2, 2, 2);
+            graphics.DrawLines(pen,
             [
                 new Point(x + 1, y + 10), new Point(x + 5, y + 5), new Point(x + 9, y + 9),
                 new Point(x + 12, y + 6), new Point(x + 15, y + 10)

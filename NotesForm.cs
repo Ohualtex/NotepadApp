@@ -10,8 +10,8 @@ internal sealed class NotesForm : ResizableNoteWindow
     private NotesTheme theme = NotesTheme.Resolve(ThemePreference.Light);
     private readonly Control workspace;
     private readonly NotesSettingsView settings;
-    private readonly Button settingsButton = new() { Text = "⚙", AccessibleName = "Settings", Dock = DockStyle.Fill };
-    private readonly Button closeButton = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
+    private readonly NoteButton settingsButton = new() { Text = "⚙", AccessibleName = "Settings", Dock = DockStyle.Fill };
+    private readonly NoteButton closeButton = new() { Text = "×", AccessibleName = "Close NotepadApp", Dock = DockStyle.Fill };
     private readonly Font windowIconFont = new("Segoe UI Symbol", 15);
     private readonly TableLayoutPanel searchRow = new() { Height = 38, Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(7, 4, 7, 4) };
     private readonly Label searchHint = new() { Text = "Search notes", Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft };
@@ -30,16 +30,16 @@ internal sealed class NotesForm : ResizableNoteWindow
         DisplayMember = nameof(Note.DisplayTitle),
         AccessibleName = "Notes"
     };
-    private readonly Button add = new() { Text = "+", AccessibleName = "New note", Dock = DockStyle.Fill };
-    private readonly Button save = new() { Text = "Save all", AutoSize = true };
-    private readonly Button reload = new() { Text = "Reload", AutoSize = true };
+    private readonly NoteButton add = new() { Text = "+", AccessibleName = "New note", Dock = DockStyle.Fill };
+    private readonly NoteButton save = new() { Text = "Save all", AutoSize = true };
+    private readonly NoteButton reload = new() { Text = "Reload", AutoSize = true };
     private readonly TextBox search = new()
     {
         Dock = DockStyle.Fill,
         AccessibleName = "Search notes",
         BorderStyle = BorderStyle.None
     };
-    private readonly Button clearSearch = new() { Text = "×", AccessibleName = "Clear search", AutoSize = true, Visible = false };
+    private readonly NoteButton clearSearch = new() { Text = "×", AccessibleName = "Clear search", AutoSize = true, Visible = false };
     private readonly Label noResults = new() { Text = "No matching notes.", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Visible = false };
     private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(0, 8, 0, 0), Visible = false };
     private List<Note> notes = [];
@@ -47,6 +47,8 @@ internal sealed class NotesForm : ResizableNoteWindow
     private bool storageReady;
     private bool closingEditors;
     private string searchQuery = "";
+    private int hoveredCard = -1;
+    private bool cardPressed;
 
     public NotesForm(NoteStore store)
     {
@@ -74,6 +76,10 @@ internal sealed class NotesForm : ResizableNoteWindow
 
         noteList.ItemHeight = TextRenderer.MeasureText("Ag", Font).Height * 3 + 26;
         noteList.DrawItem += DrawNoteCard;
+        noteList.MouseMove += (_, args) => SetCardHover(noteList.IndexFromPoint(args.Location), (args.Button & MouseButtons.Left) != 0);
+        noteList.MouseDown += (_, args) => SetCardHover(noteList.IndexFromPoint(args.Location), args.Button == MouseButtons.Left);
+        noteList.MouseUp += (_, args) => SetCardHover(noteList.IndexFromPoint(args.Location), pressed: false);
+        noteList.MouseLeave += (_, _) => SetCardHover(-1, pressed: false);
         noteList.MouseClick += (_, args) =>
         {
             int index = noteList.IndexFromPoint(args.Location);
@@ -283,8 +289,8 @@ internal sealed class NotesForm : ResizableNoteWindow
             bool primary = button == add;
             button.BackColor = primary ? theme.Primary : button == clearSearch ? theme.Control : theme.Surface;
             button.ForeColor = primary ? NotesTheme.PrimaryInk : theme.Ink;
-            button.FlatAppearance.MouseOverBackColor = primary ? theme.Primary : theme.Hover;
-            button.FlatAppearance.MouseDownBackColor = primary ? theme.Primary : theme.Pressed;
+            button.FlatAppearance.MouseOverBackColor = primary ? NoteButtonSurface.Blend(theme.Primary, Color.White, 18) : theme.Hover;
+            button.FlatAppearance.MouseDownBackColor = primary ? NoteButtonSurface.Blend(theme.Primary, Color.Black, 12) : theme.Pressed;
         }
         clearSearch.Padding = new Padding(4, 0, 4, 0);
         add.Padding = settingsButton.Padding = closeButton.Padding = Padding.Empty;
@@ -305,6 +311,14 @@ internal sealed class NotesForm : ResizableNoteWindow
         button.Padding = new Padding(8, 4, 8, 4);
     }
 
+    private void SetCardHover(int index, bool pressed)
+    {
+        if (hoveredCard == index && cardPressed == pressed) return;
+        hoveredCard = index;
+        cardPressed = pressed;
+        noteList.Invalidate();
+    }
+
     private void DrawNoteCard(object? sender, DrawItemEventArgs args)
     {
         using var listBackground = new SolidBrush(noteList.BackColor);
@@ -316,7 +330,10 @@ internal sealed class NotesForm : ResizableNoteWindow
 
         bool focused = noteList.Focused && args.State.HasFlag(DrawItemState.Selected);
         Color accent = NotePalette.Resolve(note.Accent).Color;
-        using var background = new SolidBrush(theme.NotePaper(accent, focused));
+        Color paper = theme.NotePaper(accent, focused);
+        if (hoveredCard == args.Index)
+            paper = NoteButtonSurface.Blend(theme.NotePaper(accent, false), theme.NotePaper(accent, true), cardPressed || focused ? 100 : 45);
+        using var background = new SolidBrush(paper);
         using var shape = new GraphicsPath();
         const int diameter = 16;
         shape.AddArc(card.Left, card.Top, diameter, diameter, 180, 90);
@@ -413,6 +430,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private void RefreshList(Note? selection, bool resetScroll = false)
     {
         int previousTop = resetScroll ? 0 : noteList.TopIndex;
+        SetCardHover(-1, pressed: false);
         var visibleNotes = notes.Where(note => NoteSearch.Matches(note, searchQuery)).ToArray();
         noteList.BeginUpdate();
         try

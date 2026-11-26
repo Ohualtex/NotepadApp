@@ -114,7 +114,7 @@ internal sealed class NoteOptionsPanel : UserControl
 
     private static Button CreateAction(string label)
     {
-        var button = new Button
+        var button = new NoteButton
         {
             Text = label,
             TextAlign = ContentAlignment.MiddleLeft,
