@@ -9,6 +9,7 @@ internal sealed class NotesSettingsView : UserControl
     private readonly Label heading = new() { Text = "Settings", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(7, 0, 0, 0) };
     private readonly Button save;
     private readonly Button reload;
+    private readonly Button export;
     private readonly TableLayoutPanel themeOptions = new() { AutoSize = true, ColumnCount = 3, RowCount = 1, Dock = DockStyle.Top };
     private readonly Dictionary<ThemePreference, RadioButton> themeButtons = [];
     private readonly PreferenceToggle confirmDelete = new()
@@ -20,11 +21,12 @@ internal sealed class NotesSettingsView : UserControl
     private readonly Label notice = new() { AutoSize = true, Visible = false, MaximumSize = new Size(275, 0) };
     private bool updating;
 
-    public NotesSettingsView(Action goBack, Action closeApplication, Button save, Button reload,
+    public NotesSettingsView(Action goBack, Action closeApplication, Button save, Button reload, Button export,
         Action<ThemePreference> changeTheme, Action<bool> changeConfirmation)
     {
         this.save = save;
         this.reload = reload;
+        this.export = export;
         var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(14) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -73,7 +75,7 @@ internal sealed class NotesSettingsView : UserControl
         layout.Controls.Add(deleteRow, 0, 3);
         layout.Controls.Add(new Label { Text = "Local storage", AutoSize = true, Margin = new Padding(3, 22, 3, 4) }, 0, 4);
         var maintenance = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
-        maintenance.Controls.AddRange([save, reload]);
+        maintenance.Controls.AddRange([save, reload, export]);
         layout.Controls.Add(maintenance, 0, 5);
         layout.Controls.Add(notice, 0, 6);
 
@@ -108,6 +110,7 @@ internal sealed class NotesSettingsView : UserControl
             NotesForm.StyleHeaderButton(close, theme);
             StyleAction(save, theme);
             StyleAction(reload, theme);
+            StyleAction(export, theme);
             foreach (var (mode, button) in themeButtons)
             {
                 button.Checked = mode == preferences.Theme;

@@ -33,6 +33,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private readonly NoteButton add = new() { AccessibleName = "New note", Dock = DockStyle.Fill };
     private readonly NoteButton save = new() { Text = "Save all", AutoSize = true };
     private readonly NoteButton reload = new() { Text = "Reload", AutoSize = true };
+    private readonly NoteButton export = new() { Text = "Export selected note (.txt)", AutoSize = true, Enabled = false };
     private readonly TextBox search = new()
     {
         Dock = DockStyle.Fill,
@@ -64,7 +65,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         StartPosition = FormStartPosition.CenterScreen;
         Padding = new Padding(5, 0, 3, 5);
         workspace = BuildWorkspace();
-        settings = new NotesSettingsView(ShowNotes, Close, save, reload,
+        settings = new NotesSettingsView(ShowNotes, Close, save, reload, export,
             mode => ChangePreferences(preferences with { Theme = mode }),
             confirm => ChangePreferences(preferences with { ConfirmBeforeDeleting = confirm }))
         {
@@ -152,6 +153,7 @@ internal sealed class NotesForm : ResizableNoteWindow
             ShowNotes();
             SaveNotes();
         };
+        export.Click += (_, _) => ExportSelectedNote();
         reload.Click += (_, _) =>
         {
             ShowNotes();
@@ -665,6 +667,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         Note? selected = visibleNotes.Contains(selection) ? selection : visibleNotes.FirstOrDefault();
 
         noteList.SetCards(visibleNotes, MeasureCardHeights(visibleNotes), selected, offset);
+        export.Enabled = selected is not null;
         noteList.Visible = visibleNotes.Length > 0;
         noResults.Text = searchQuery.Length == 0 ? "No notes yet." : "No matching notes.";
         noResults.Visible = visibleNotes.Length == 0;
@@ -679,7 +682,7 @@ internal sealed class NotesForm : ResizableNoteWindow
             return;
         }
 
-        var editor = new NoteEditorForm(note, theme, EditNote, DeleteNote, ExportNote, ChangeNoteAccent, AddNote, BringUpNotes);
+        var editor = new NoteEditorForm(note, theme, EditNote, DeleteNote, ChangeNoteAccent, AddNote, BringUpNotes);
         editors.Add(note.Id, editor);
         editor.FormClosing += (_, args) =>
         {
@@ -873,18 +876,20 @@ internal sealed class NotesForm : ResizableNoteWindow
             "Unsaved changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
     }
 
-    private void ExportNote(NoteEditorForm editor, Note note)
+    private void ExportSelectedNote()
     {
+        if (noteList.SelectedItem is not Note note) return;
+
         using var dialog = new SaveFileDialog { Title = "Export note", Filter = "Text files (*.txt)|*.txt", DefaultExt = "txt", AddExtension = true };
-        if (dialog.ShowDialog(editor) != DialogResult.OK) return;
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
         {
             NoteStore.Export(note, dialog.FileName);
-            editor.SetStatus($"Exported {Path.GetFileName(dialog.FileName)}.");
+            settings.SetNotice($"Exported {Path.GetFileName(dialog.FileName)}.");
         }
         catch (Exception error) when (IsStorageError(error))
         {
-            editor.SetStatus($"Could not export the note. {error.Message}");
+            settings.SetNotice($"Could not export the note. {error.Message}");
         }
     }
 

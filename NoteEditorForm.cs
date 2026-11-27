@@ -49,7 +49,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     };
 
     public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string?> edit,
-        Action<NoteEditorForm, Note> deleteNote, Action<NoteEditorForm, Note> exportNote, Action<Note, string> changeAccent,
+        Action<NoteEditorForm, Note> deleteNote, Action<Note, string> changeAccent,
         Action addNote, Action showNotes)
     {
         this.note = note;
@@ -75,11 +75,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
                 showNotes();
             },
 
-            () =>
-            {
-                CloseDrawer();
-                exportNote(this, note);
-            },
             () =>
             {
                 CloseDrawer();

@@ -8,13 +8,12 @@ internal sealed class NoteOptionsPanel : UserControl
     private readonly TableLayoutPanel rows = new() { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
     private readonly Dictionary<string, ColorChoice> choices = [];
     private readonly Button notesList = CreateAction("Notes list");
-    private readonly Button export = CreateAction("Export .txt");
     private readonly Button delete = CreateAction("Delete note");
     private readonly Label dates = new() { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(14, 6, 14, 8) };
     private string selectedAccent = NotePalette.DefaultId;
     private bool updatingSelection;
 
-    public NoteOptionsPanel(Action<string> changeAccent, Action showNotes, Action exportNote, Action deleteNote)
+    public NoteOptionsPanel(Action<string> changeAccent, Action showNotes, Action deleteNote)
     {
         var actions = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         rows.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -43,15 +42,13 @@ internal sealed class NoteOptionsPanel : UserControl
         }
 
         rows.Controls.Add(notesList, 0, 0);
-        rows.Controls.Add(export, 0, 1);
-        rows.Controls.Add(delete, 0, 2);
-        rows.Controls.Add(dates, 0, 3);
+        rows.Controls.Add(delete, 0, 1);
+        rows.Controls.Add(dates, 0, 2);
         actions.Controls.Add(rows);
         Controls.Add(actions);
         Controls.Add(palette);
 
         notesList.Click += (_, _) => showNotes();
-        export.Click += (_, _) => exportNote();
         delete.Click += (_, _) => deleteNote();
     }
 
@@ -86,7 +83,7 @@ internal sealed class NoteOptionsPanel : UserControl
             updatingSelection = false;
         }
 
-        foreach (var button in new[] { notesList, export, delete })
+        foreach (var button in new[] { notesList, delete })
         {
             button.BackColor = theme.Surface;
             button.ForeColor = theme.Ink;
