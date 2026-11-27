@@ -75,15 +75,19 @@ internal sealed class NoteStore(string path)
 
     public void Save(List<Note> notes) => WriteJson(path, notes);
 
-    private static void WriteJson<T>(string destination, T value)
+    private static void WriteJson<T>(string destination, T value) =>
+        WriteFile(destination, stream => JsonSerializer.Serialize(stream, value, Options));
+
+    private static void WriteFile(string destination, Action<FileStream> write)
     {
+        destination = Path.GetFullPath(destination);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         string pendingPath = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             using (var stream = new FileStream(pendingPath, FileMode.CreateNew))
             {
-                JsonSerializer.Serialize(stream, value, Options);
+                write(stream);
                 stream.Flush(flushToDisk: true);
             }
 
@@ -95,10 +99,30 @@ internal sealed class NoteStore(string path)
         }
     }
 
-    public static void Export(Note note, string destination)
+    public static void Export(IEnumerable<Note> notes, string destination)
     {
         if (!Path.GetExtension(destination).Equals(".txt", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Choose a file name ending in .txt.");
-        File.WriteAllText(destination, note.DisplayTitle + Environment.NewLine + Environment.NewLine + note.Content, Encoding.UTF8);
+
+        WriteFile(destination, stream =>
+        {
+            using var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true);
+            bool first = true;
+            foreach (var note in notes.OrderByDescending(note => note.UpdatedAt))
+            {
+                if (!first)
+                {
+                    writer.WriteLine();
+                    writer.WriteLine();
+                    writer.WriteLine("---");
+                    writer.WriteLine();
+                }
+
+                writer.WriteLine(note.DisplayTitle);
+                writer.WriteLine();
+                writer.Write(note.Content);
+                first = false;
+            }
+        });
     }
 }

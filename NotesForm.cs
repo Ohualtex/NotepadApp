@@ -33,7 +33,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private readonly NoteButton add = new() { AccessibleName = "New note", Dock = DockStyle.Fill };
     private readonly NoteButton save = new() { Text = "Save all", AutoSize = true };
     private readonly NoteButton reload = new() { Text = "Reload", AutoSize = true };
-    private readonly NoteButton export = new() { Text = "Export selected note (.txt)", AutoSize = true, Enabled = false };
+    private readonly NoteButton export = new() { Text = "Export all notes (.txt)", AutoSize = true, Enabled = false };
     private readonly TextBox search = new()
     {
         Dock = DockStyle.Fill,
@@ -153,7 +153,7 @@ internal sealed class NotesForm : ResizableNoteWindow
             ShowNotes();
             SaveNotes();
         };
-        export.Click += (_, _) => ExportSelectedNote();
+        export.Click += (_, _) => ExportAllNotes();
         reload.Click += (_, _) =>
         {
             ShowNotes();
@@ -667,7 +667,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         Note? selected = visibleNotes.Contains(selection) ? selection : visibleNotes.FirstOrDefault();
 
         noteList.SetCards(visibleNotes, MeasureCardHeights(visibleNotes), selected, offset);
-        export.Enabled = selected is not null;
+        export.Enabled = notes.Count > 0;
         noteList.Visible = visibleNotes.Length > 0;
         noResults.Text = searchQuery.Length == 0 ? "No notes yet." : "No matching notes.";
         noResults.Visible = visibleNotes.Length == 0;
@@ -876,20 +876,27 @@ internal sealed class NotesForm : ResizableNoteWindow
             "Unsaved changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
     }
 
-    private void ExportSelectedNote()
+    private void ExportAllNotes()
     {
-        if (noteList.SelectedItem is not Note note) return;
+        if (notes.Count == 0) return;
 
-        using var dialog = new SaveFileDialog { Title = "Export note", Filter = "Text files (*.txt)|*.txt", DefaultExt = "txt", AddExtension = true };
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Export all notes",
+            Filter = "Text files (*.txt)|*.txt",
+            DefaultExt = "txt",
+            AddExtension = true,
+            FileName = "NotepadApp-notes.txt"
+        };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         try
         {
-            NoteStore.Export(note, dialog.FileName);
-            settings.SetNotice($"Exported {Path.GetFileName(dialog.FileName)}.");
+            NoteStore.Export(notes, dialog.FileName);
+            settings.SetNotice($"Exported {notes.Count} notes to {Path.GetFileName(dialog.FileName)}.");
         }
         catch (Exception error) when (IsStorageError(error))
         {
-            settings.SetNotice($"Could not export the note. {error.Message}");
+            settings.SetNotice($"Could not export notes. {error.Message}");
         }
     }
 
