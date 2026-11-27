@@ -102,10 +102,8 @@ internal sealed class NotesSettingsView : UserControl
         {
             BackColor = theme.Surface;
             ForeColor = theme.Ink;
-            StyleAction(back, theme);
-            StyleAction(close, theme);
-            back.BackColor = close.BackColor = theme.Surface;
-            back.Padding = close.Padding = Padding.Empty;
+            NotesForm.StyleHeaderButton(back, theme);
+            NotesForm.StyleHeaderButton(close, theme);
             StyleAction(save, theme);
             StyleAction(reload, theme);
             foreach (var (mode, button) in themeButtons)

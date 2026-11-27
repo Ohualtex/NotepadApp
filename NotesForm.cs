@@ -324,21 +324,25 @@ internal sealed class NotesForm : ResizableNoteWindow
         ForeColor = workspace.ForeColor = noteList.ForeColor = search.ForeColor = theme.Ink;
         search.BackColor = searchRow.BackColor = theme.Control;
         searchHint.ForeColor = theme.MutedInk;
-        foreach (Button button in new[] { add, clearSearch, settingsButton, closeButton })
-        {
-            StyleButton(button);
-            bool primary = button == add;
-            button.BackColor = primary ? theme.Primary : button == clearSearch ? theme.Control : theme.Surface;
-            button.ForeColor = primary ? NotesTheme.PrimaryInk : theme.Ink;
-            button.FlatAppearance.MouseOverBackColor = primary ? NoteButtonSurface.Blend(theme.Primary, Color.White, 18) : theme.Hover;
-            button.FlatAppearance.MouseDownBackColor = primary ? NoteButtonSurface.Blend(theme.Primary, Color.Black, 12) : theme.Pressed;
-        }
+        foreach (NoteButton button in new[] { add, settingsButton, closeButton })
+            StyleHeaderButton(button, theme);
+        StyleHeaderButton(clearSearch, theme);
+        clearSearch.BackColor = theme.Control;
         clearSearch.Padding = new Padding(4, 0, 4, 0);
-        add.Padding = settingsButton.Padding = closeButton.Padding = Padding.Empty;
         searchRow.Invalidate(true);
         noteList.Invalidate();
         settings.Apply(theme, preferences);
         foreach (var editor in editors.Values) editor.ApplyTheme(theme);
+    }
+
+    internal static void StyleHeaderButton(NoteButton button, NotesTheme theme)
+    {
+        StyleButton(button);
+        button.BackColor = theme.Surface;
+        button.ForeColor = theme.Ink;
+        button.FlatAppearance.MouseOverBackColor = theme.HeaderHover;
+        button.FlatAppearance.MouseDownBackColor = theme.HeaderPressed;
+        button.Padding = Padding.Empty;
     }
 
     internal static void StyleButton(ButtonBase button)
