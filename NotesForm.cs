@@ -184,7 +184,7 @@ internal sealed class NotesForm : ResizableNoteWindow
             outline[point + 3] = At(angle + 15, 7);
         }
 
-        using var pen = new Pen(ink, 1.3f) { LineJoin = LineJoin.Round };
+        using var pen = new Pen(ink, NoteButtonIcons.OutlineWidth) { LineJoin = LineJoin.Round };
         graphics.DrawPolygon(pen, outline);
         const float opening = 3.3f;
         graphics.DrawEllipse(pen, -opening, -opening, opening * 2, opening * 2);

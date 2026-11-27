@@ -162,16 +162,18 @@ internal sealed class NoteButtonSurface
 
 internal static class NoteButtonIcons
 {
+    internal const float OutlineWidth = 1.5f;
+
     internal static void Add(Graphics graphics, Color ink)
     {
-        using var pen = new Pen(ink, 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        using var pen = new Pen(ink, OutlineWidth) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         graphics.DrawLine(pen, -10, 0, 10, 0);
         graphics.DrawLine(pen, 0, -10, 0, 10);
     }
 
     internal static void Close(Graphics graphics, Color ink)
     {
-        using var pen = new Pen(ink, 1.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        using var pen = new Pen(ink, OutlineWidth) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         graphics.DrawLine(pen, -6.5f, -6.5f, 6.5f, 6.5f);
         graphics.DrawLine(pen, -6.5f, 6.5f, 6.5f, -6.5f);
     }
