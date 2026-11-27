@@ -4,7 +4,7 @@ NotepadApp is a Windows desktop app for keeping sticky notes. Write in independe
 
 ## Screenshot
 
-![NotepadApp showing the notes list alongside an active and an inactive post-it](docs/screenshots/notepadapp.png)
+![NotepadApp in light mode with the notes list on the left and inactive and active sticky notes stacked on the right](docs/screenshots/notepadapp.png)
 
 ## Download for Windows
 
@@ -24,8 +24,11 @@ The app uses C#, Windows Forms, and the .NET standard library.
 
 - Select **+** in the list or a post-it to create a note. The new note opens ready to type. To add an optional title, click the top bar or press **F2**.
 - Drag a post-it by its top bar and resize it from its edges. Each note remembers its own position and size. The top bar and formatting toolbar appear when the note has focus.
-- Select a card to open its note or bring it forward. Closing the list leaves open notes on your desktop. Use **⋯ → Notes list** from a post-it to bring back the list.
-- Drag the notes list by the empty space in the top bar. The **Notes** heading sits below the bar, above the search box.
+- Select a card to open its note or bring it forward. Hover over a card and select **⋯** to open or delete the note from the list.
+- Cards are sorted by last edit and show up to five lines of content. The top-right corner shows the creation time for notes less than 24 hours old and the month and day for older notes.
+- Scroll through the list with the mouse wheel or drag the thin scrollbar at the right edge.
+- Drag the notes list by the empty space in the top bar and resize it from the edges. The list remembers its position and size.
+- Closing the list leaves open notes on your desktop. Use **⋯ → Notes list** from a post-it to bring it back.
 - Search by title or text with **Ctrl+F**. Matches are highlighted in the cards, including rich-text previews. Press **Esc** while the search box has focus to clear it.
 - Use the formatting toolbar for bold, italic, underline, strikethrough, and bullets. Use the image icon to insert a picture at the cursor.
 - Open **⋯** for note colors, **Save all**, **Export .txt**, and **Delete note**. The export contains a title line and the note's plain text in UTF-8.
@@ -38,7 +41,7 @@ Changes save automatically after a short pause. Use **Save all** to write change
 | File | Contents |
 | --- | --- |
 | `%LOCALAPPDATA%\NotepadApp\notes.json` | Note text, formatting, embedded images, colors, timestamps, and window positions and sizes |
-| `%LOCALAPPDATA%\NotepadApp\settings.json` | Theme and delete confirmation preferences |
+| `%LOCALAPPDATA%\NotepadApp\settings.json` | Theme, delete confirmation, and the position and size of the notes list window |
 
 If the notes file cannot be read, NotepadApp reports the error and disables saving. Repair the file or move it to a backup location, then choose **Settings → Local storage → Reload**.
 
@@ -48,7 +51,7 @@ If the notes file cannot be read, NotepadApp reports the error and disables savi
 | --- | --- |
 | `Program.cs`, `NotepadApp.csproj` | Application entry point and WinForms project settings |
 | `TaskbarAppearance.cs`, `Assets/Taskbar.ico` | Windows taskbar icon and shell integration |
-| `NotesForm.cs`, `BufferedNoteList.cs`, `NoteSearch.cs` | Note list, buffered card drawing, search, and coordination of open editors |
+| `NotesForm.cs`, `BufferedNoteList.cs`, `NoteSearch.cs` | Note list, card actions, buffered pixel scrolling, search, and coordination of open editors |
 | `NotePreviewRenderer.cs`, `NoteRichContent.cs` | Cached previews that preserve formatting, images, and search highlights |
 | `NoteEditorForm.cs`, `NoteOptionsPanel.cs`, `ResizableNoteWindow.cs` | Post-it editor, in-note panel, and resizable window frame |
 | `NotesSettingsView.cs`, `AppPreferences.cs`, `NotesTheme.cs` | Settings UI, user preferences, and light/dark palettes |
