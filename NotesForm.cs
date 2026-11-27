@@ -679,7 +679,7 @@ internal sealed class NotesForm : ResizableNoteWindow
             return;
         }
 
-        var editor = new NoteEditorForm(note, theme, EditNote, SaveNotes, DeleteNote, ExportNote, ChangeNoteAccent, AddNote, BringUpNotes);
+        var editor = new NoteEditorForm(note, theme, EditNote, DeleteNote, ExportNote, ChangeNoteAccent, AddNote, BringUpNotes);
         editors.Add(note.Id, editor);
         editor.FormClosing += (_, args) =>
         {
@@ -687,7 +687,7 @@ internal sealed class NotesForm : ResizableNoteWindow
                 args.Cancel = !RememberWindowPlacements([note], editor);
         };
         editor.FormClosed += (_, _) => EditorClosed(note.Id);
-        editor.SetAvailability(storageReady, dirty);
+        editor.SetAvailability(storageReady);
         editor.SetStatus(status.Text);
         editor.Show();
     }
@@ -841,7 +841,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         save.Enabled = storageReady && dirty;
         foreach (var editor in editors.Values)
         {
-            editor.SetAvailability(storageReady, dirty);
+            editor.SetAvailability(storageReady);
             editor.SetStatus(message);
         }
     }

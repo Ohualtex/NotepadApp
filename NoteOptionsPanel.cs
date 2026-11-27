@@ -4,27 +4,27 @@ namespace NotepadApp;
 
 internal sealed class NoteOptionsPanel : UserControl
 {
-    private readonly TableLayoutPanel rows = new() { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(8, 6, 8, 6) };
+    private const int PaletteHeight = 46;
+    private readonly TableLayoutPanel rows = new() { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
     private readonly Dictionary<string, ColorChoice> choices = [];
     private readonly Button notesList = CreateAction("Notes list");
-    private readonly Button save = CreateAction("Save all");
     private readonly Button export = CreateAction("Export .txt");
     private readonly Button delete = CreateAction("Delete note");
-    private readonly Label dates = new() { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(8, 6, 8, 3) };
+    private readonly Label dates = new() { Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(14, 6, 14, 8) };
     private string selectedAccent = NotePalette.DefaultId;
     private bool updatingSelection;
 
-    public NoteOptionsPanel(Action<string> changeAccent, Action showNotes, Action saveNote, Action exportNote, Action deleteNote)
+    public NoteOptionsPanel(Action<string> changeAccent, Action showNotes, Action exportNote, Action deleteNote)
     {
-        AutoScroll = true;
+        var actions = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         rows.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         var palette = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            Height = 39,
+            Dock = DockStyle.Top,
+            Height = PaletteHeight,
             RowCount = 1,
             ColumnCount = NotePalette.Colors.Count,
-            Margin = new Padding(0, 0, 0, 4)
+            Margin = Padding.Empty
         };
         palette.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         foreach (var accent in NotePalette.Colors)
@@ -42,23 +42,22 @@ internal sealed class NoteOptionsPanel : UserControl
             palette.Controls.Add(choice, index, 0);
         }
 
-        rows.Controls.Add(palette, 0, 0);
-        rows.Controls.Add(notesList, 0, 1);
-        rows.Controls.Add(save, 0, 2);
-        rows.Controls.Add(export, 0, 3);
-        rows.Controls.Add(delete, 0, 4);
-        rows.Controls.Add(dates, 0, 5);
-        Controls.Add(rows);
+        rows.Controls.Add(notesList, 0, 0);
+        rows.Controls.Add(export, 0, 1);
+        rows.Controls.Add(delete, 0, 2);
+        rows.Controls.Add(dates, 0, 3);
+        actions.Controls.Add(rows);
+        Controls.Add(actions);
+        Controls.Add(palette);
 
         notesList.Click += (_, _) => showNotes();
-        save.Click += (_, _) => saveNote();
         export.Click += (_, _) => exportNote();
         delete.Click += (_, _) => deleteNote();
     }
 
     public void FitTo(Size available)
     {
-        int preferredHeight = rows.GetPreferredSize(new Size(available.Width, 0)).Height;
+        int preferredHeight = PaletteHeight + rows.GetPreferredSize(new Size(available.Width, 0)).Height;
         Size = new Size(available.Width, Math.Min(available.Height, preferredHeight));
     }
 
@@ -87,7 +86,7 @@ internal sealed class NoteOptionsPanel : UserControl
             updatingSelection = false;
         }
 
-        foreach (var button in new[] { notesList, save, export, delete })
+        foreach (var button in new[] { notesList, export, delete })
         {
             button.BackColor = theme.Surface;
             button.ForeColor = theme.Ink;
@@ -100,11 +99,10 @@ internal sealed class NoteOptionsPanel : UserControl
             : Color.FromArgb(151, 49, 54);
     }
 
-    public void SetAvailability(bool storageReady, bool dirty)
+    public void SetAvailability(bool storageReady)
     {
         foreach (var choice in choices.Values) choice.Enabled = storageReady;
         delete.Enabled = storageReady;
-        save.Enabled = storageReady && dirty;
     }
 
     public void SetDates(Note note)
@@ -119,17 +117,19 @@ internal sealed class NoteOptionsPanel : UserControl
             Text = label,
             TextAlign = ContentAlignment.MiddleLeft,
             Dock = DockStyle.Fill,
-            Height = 30,
-            Margin = Padding.Empty
+            Height = 40,
+            Margin = Padding.Empty,
+            FillCell = true
         };
         NotesForm.StyleButton(button);
+        button.Padding = new Padding(14, 0, 14, 0);
         return button;
     }
 
     private sealed class ColorChoice : RadioButton
     {
         private readonly Color swatch;
-        private Color hover;
+        private bool hovered;
 
         public ColorChoice(string name, Color swatch)
         {
@@ -146,22 +146,31 @@ internal sealed class NoteOptionsPanel : UserControl
         {
             BackColor = theme.Surface;
             ForeColor = theme.Ink;
-            hover = theme.Control;
+            Invalidate();
+        }
+
+        protected override void OnMouseEnter(EventArgs args)
+        {
+            base.OnMouseEnter(args);
+            hovered = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs args)
+        {
+            base.OnMouseLeave(args);
+            hovered = false;
             Invalidate();
         }
 
         protected override void OnPaint(PaintEventArgs args)
         {
             var graphics = args.Graphics;
-            graphics.Clear(Enabled && ClientRectangle.Contains(PointToClient(Cursor.Position)) ? hover : BackColor);
+            Color fill = Enabled
+                ? hovered ? NoteButtonSurface.Blend(swatch, Color.Black, 8) : swatch
+                : NoteButtonSurface.Blend(swatch, BackColor, 45);
+            graphics.Clear(fill);
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            int size = Math.Min(24, Math.Min(Width, Height) - 6);
-            if (size < 8) return;
-
-            int x = (Width - size) / 2;
-            int y = (Height - size) / 2;
-            using var fill = new SolidBrush(Enabled ? swatch : hover);
-            graphics.FillEllipse(fill, x, y, size, size);
 
             if (Checked)
             {
@@ -174,7 +183,7 @@ internal sealed class NoteOptionsPanel : UserControl
             if (Focused && ShowFocusCues)
             {
                 using var focus = new Pen(ForeColor);
-                graphics.DrawEllipse(focus, x - 2, y - 2, size + 4, size + 4);
+                graphics.DrawRectangle(focus, Rectangle.Inflate(ClientRectangle, -3, -3));
             }
         }
     }

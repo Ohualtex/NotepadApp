@@ -48,7 +48,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         Padding = new Padding(0, FormatToolbarInset, 0, FormatToolbarInset)
     };
 
-    public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string?> edit, Func<bool> saveNotes,
+    public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string?> edit,
         Action<NoteEditorForm, Note> deleteNote, Action<NoteEditorForm, Note> exportNote, Action<Note, string> changeAccent,
         Action addNote, Action showNotes)
     {
@@ -74,11 +74,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
                 CloseDrawer();
                 showNotes();
             },
-            () =>
-            {
-                CloseDrawer();
-                saveNotes();
-            },
+
             () =>
             {
                 CloseDrawer();
@@ -485,11 +481,11 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         return layout;
     }
 
-    public void SetAvailability(bool storageReady, bool dirty)
+    public void SetAvailability(bool storageReady)
     {
         content.Enabled = newNote.Enabled = storageReady;
         formatTools.Enabled = storageReady && !drawerOpen;
-        drawer.SetAvailability(storageReady, dirty);
+        drawer.SetAvailability(storageReady);
     }
 
     public void SetStatus(string message)
