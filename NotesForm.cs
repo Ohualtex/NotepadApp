@@ -31,8 +31,6 @@ internal sealed class NotesForm : ResizableNoteWindow
         AccessibleName = "Notes"
     };
     private readonly NoteButton add = new() { AccessibleName = "New note", Dock = DockStyle.Fill };
-    private readonly NoteButton save = new() { Text = "Save all", AutoSize = true };
-    private readonly NoteButton reload = new() { Text = "Reload", AutoSize = true };
     private readonly NoteButton export = new() { Text = "Export all notes (.txt)", AutoSize = true, Enabled = false };
     private readonly TextBox search = new()
     {
@@ -65,7 +63,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         StartPosition = FormStartPosition.CenterScreen;
         Padding = new Padding(5, 0, 3, 5);
         workspace = BuildWorkspace();
-        settings = new NotesSettingsView(ShowNotes, Close, save, reload, export,
+        settings = new NotesSettingsView(ShowNotes, Close, export,
             mode => ChangePreferences(preferences with { Theme = mode }),
             confirm => ChangePreferences(preferences with { ConfirmBeforeDeleting = confirm }))
         {
@@ -148,17 +146,7 @@ internal sealed class NotesForm : ResizableNoteWindow
             cardDate.Dispose();
         };
         add.Click += (_, _) => AddNote();
-        save.Click += (_, _) =>
-        {
-            ShowNotes();
-            SaveNotes();
-        };
         export.Click += (_, _) => ExportAllNotes();
-        reload.Click += (_, _) =>
-        {
-            ShowNotes();
-            if (ResolveChanges() && RememberWindowPlacements(notes, this)) LoadNotes();
-        };
         FormClosing += (_, args) =>
         {
             if (args.CloseReason == CloseReason.UserClosing && Visible && editors.Count > 0)
@@ -653,7 +641,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         catch (Exception error) when (IsStorageError(error))
         {
             storageReady = false;
-            SetStatus($"Could not load notes. {error.Message} Fix the file and select Reload.", showNotice: true);
+            SetStatus($"Could not load notes. {error.Message} Fix the file and reopen NotepadApp.", showNotice: true);
         }
     }
 
@@ -841,7 +829,6 @@ internal sealed class NotesForm : ResizableNoteWindow
         status.Text = message;
         status.Visible = showNotice;
         add.Enabled = storageReady;
-        save.Enabled = storageReady && dirty;
         foreach (var editor in editors.Values)
         {
             editor.SetAvailability(storageReady);
