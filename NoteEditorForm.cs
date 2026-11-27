@@ -26,6 +26,9 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private Color paper;
     private Color chrome;
     private readonly Label titleCaption = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty };
+    private const int HeaderHeight = 40;
+    private const int TopResizeGrip = 5;
+    private readonly RowStyle headerRow = new(SizeType.Absolute, HeaderHeight - TopResizeGrip);
     private readonly TableLayoutPanel header = new() { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
     private readonly Label contentHint = new() { Text = "Write a note…", AutoSize = true, Location = new Point(12, 6), Visible = false };
     private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Visible = false };
@@ -202,6 +205,8 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private void SetChromeVisible(bool visible)
     {
         chromeVisible = visible;
+        Padding = new Padding(Padding.Left, visible ? 0 : TopResizeGrip, Padding.Right, Padding.Bottom);
+        headerRow.Height = visible ? HeaderHeight : HeaderHeight - TopResizeGrip;
         header.Visible = formatTools.Visible = visible;
         if (!visible)
         {
@@ -260,12 +265,15 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             button.FlatAppearance.CheckedBackColor = theme.Control;
         }
 
-        foreach (Button button in new[] { newNote, options, close })
+        Color contrast = chrome.GetBrightness() < 0.5f ? Color.White : Color.Black;
+        Color hover = NoteButtonSurface.Blend(chrome, contrast, 10);
+        Color pressed = NoteButtonSurface.Blend(chrome, contrast, 17);
+        foreach (NoteButton button in new[] { newNote, options, close })
         {
             button.BackColor = chrome;
             button.ForeColor = theme.Ink;
-            button.FlatAppearance.MouseOverBackColor = theme.Hover;
-            button.FlatAppearance.MouseDownBackColor = theme.Pressed;
+            button.FlatAppearance.MouseOverBackColor = hover;
+            button.FlatAppearance.MouseDownBackColor = pressed;
         }
     }
 
@@ -402,19 +410,20 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     {
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
+        layout.RowStyles.Add(headerRow);
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, HeaderHeight));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, HeaderHeight));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, HeaderHeight));
         header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var titleArea = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 8, 4, 0), Margin = Padding.Empty };
         titleArea.Controls.Add(titleCaption);
         titleArea.Controls.Add(title);
+        ConfigureCaption(titleArea, BeginTitleEdit, topResizeGrip: TopResizeGrip);
         newNote.SetCenteredIcon(NoteButtonIcons.Add);
         options.SetCenteredIcon(NoteButtonIcons.More);
         close.SetCenteredIcon(NoteButtonIcons.Close);
@@ -422,11 +431,12 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         header.Controls.Add(titleArea, 1, 0);
         header.Controls.Add(options, 2, 0);
         header.Controls.Add(close, 3, 0);
-        foreach (Button button in new[] { newNote, options, close })
+        foreach (NoteButton button in new[] { newNote, options, close })
         {
             NotesForm.StyleButton(button);
             button.Margin = Padding.Empty;
             button.Padding = Padding.Empty;
+            button.FillCell = true;
         }
 
         formatTools.Margin = Padding.Empty;
