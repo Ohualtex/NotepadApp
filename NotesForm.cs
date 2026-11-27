@@ -73,7 +73,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         };
         Controls.Add(workspace);
         Controls.Add(settings);
-        ConfigureCaption(settings.Caption);
+        ConfigureCaption(settings.Caption, topResizeGrip: 5);
         add.SetCenteredIcon(NoteButtonIcons.Add);
         settingsButton.SetCenteredIcon(PaintSettingsIcon);
         closeButton.SetCenteredIcon(NoteButtonIcons.Close);
@@ -302,7 +302,6 @@ internal sealed class NotesForm : ResizableNoteWindow
     private void ShowSettings()
     {
         workspace.Hide();
-        Padding = new Padding(5);
         settings.Show();
         settings.BringToFront();
         settings.FocusBack();
@@ -311,7 +310,6 @@ internal sealed class NotesForm : ResizableNoteWindow
     private void ShowNotes()
     {
         settings.Hide();
-        Padding = new Padding(5, 0, 3, 5);
         workspace.Show();
         settingsButton.Focus();
     }

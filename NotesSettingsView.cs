@@ -28,19 +28,20 @@ internal sealed class NotesSettingsView : UserControl
         var panel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(14) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        var header = new TableLayoutPanel { Height = 38, Dock = DockStyle.Top, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 0, 0, 11) };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
+        var header = new TableLayoutPanel { Height = 48, Dock = DockStyle.Top, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
         header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         heading.Font = headingFont;
         back.SetCenteredIcon(NoteButtonIcons.Back);
         close.SetCenteredIcon(NoteButtonIcons.Close);
+        back.Margin = close.Margin = Padding.Empty;
+        back.FillCell = close.FillCell = true;
         header.Controls.Add(back, 0, 0);
         header.Controls.Add(heading, 1, 0);
         header.Controls.Add(close, 2, 0);
-        layout.Controls.Add(header, 0, 0);
-        layout.Controls.Add(new Label { Text = "Theme", AutoSize = true, Margin = new Padding(3, 0, 3, 6) }, 0, 1);
+        layout.Controls.Add(new Label { Text = "Theme", AutoSize = true, Margin = new Padding(3, 0, 3, 6) }, 0, 0);
         foreach (ThemePreference mode in Enum.GetValues<ThemePreference>())
         {
             int index = themeButtons.Count;
@@ -61,20 +62,20 @@ internal sealed class NotesSettingsView : UserControl
             themeButtons.Add(mode, button);
             themeOptions.Controls.Add(button, index, 0);
         }
-        layout.Controls.Add(themeOptions, 0, 2);
-        layout.Controls.Add(new Label { Text = "Notes", AutoSize = true, Margin = new Padding(3, 22, 3, 4) }, 0, 3);
+        layout.Controls.Add(themeOptions, 0, 1);
+        layout.Controls.Add(new Label { Text = "Notes", AutoSize = true, Margin = new Padding(3, 22, 3, 4) }, 0, 2);
 
         var deleteRow = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, RowCount = 1, Dock = DockStyle.Top };
         deleteRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         deleteRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         deleteRow.Controls.Add(new Label { Text = "Confirm before deleting", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoSize = true }, 0, 0);
         deleteRow.Controls.Add(confirmDelete, 1, 0);
-        layout.Controls.Add(deleteRow, 0, 4);
-        layout.Controls.Add(new Label { Text = "Local storage", AutoSize = true, Margin = new Padding(3, 22, 3, 4) }, 0, 5);
+        layout.Controls.Add(deleteRow, 0, 3);
+        layout.Controls.Add(new Label { Text = "Local storage", AutoSize = true, Margin = new Padding(3, 22, 3, 4) }, 0, 4);
         var maintenance = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
         maintenance.Controls.AddRange([save, reload]);
-        layout.Controls.Add(maintenance, 0, 6);
-        layout.Controls.Add(notice, 0, 7);
+        layout.Controls.Add(maintenance, 0, 5);
+        layout.Controls.Add(notice, 0, 6);
 
         back.Click += (_, _) => goBack();
         close.Click += (_, _) => closeApplication();
@@ -85,6 +86,7 @@ internal sealed class NotesSettingsView : UserControl
 
         panel.Controls.Add(layout);
         Controls.Add(panel);
+        Controls.Add(header);
         Disposed += (_, _) =>
         {
             headingFont.Dispose();
