@@ -398,24 +398,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         bullets.Checked = content.SelectionBullet;
     }
 
-    public NoteWindowPlacement GetWindowPlacement()
-    {
-        Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
-        return new NoteWindowPlacement(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-    }
-
-    private void RestoreWindowPlacement(NoteWindowPlacement? placement)
-    {
-        if (placement is not { Width: > 0, Height: > 0 }) return;
-
-        Rectangle area = Screen.FromPoint(new Point(placement.X, placement.Y)).WorkingArea;
-        int width = Math.Clamp(placement.Width, Math.Min(MinimumSize.Width, area.Width), area.Width);
-        int height = Math.Clamp(placement.Height, Math.Min(MinimumSize.Height, area.Height), area.Height);
-        int left = Math.Clamp(placement.X, area.Left, area.Right - width);
-        int top = Math.Clamp(placement.Y, area.Top, area.Bottom - height);
-        Bounds = new Rectangle(left, top, width, height);
-    }
-
     private Control BuildWorkspace()
     {
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };

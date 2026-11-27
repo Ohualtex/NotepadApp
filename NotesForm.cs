@@ -45,6 +45,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private List<Note> notes = [];
     private bool dirty;
     private bool storageReady;
+    private bool preferencesLoaded;
     private bool closingEditors;
     private string searchQuery = "";
     private int hoveredCard = -1;
@@ -95,6 +96,11 @@ internal sealed class NotesForm : ResizableNoteWindow
             if (!noteList.IsDisposed) InvalidateCard(noteList.IndexOf(note));
         };
         LoadPreferences();
+        if (preferences.ListWindowPlacement is { Width: > 0, Height: > 0 })
+        {
+            StartPosition = FormStartPosition.Manual;
+            Load += (_, _) => RestoreWindowPlacement(preferences.ListWindowPlacement);
+        }
 
         noteList.ClientSizeChanged += (_, _) => UpdateCardHeights();
         noteList.HandleCreated += (_, _) => UpdateCardHeights(force: true);
@@ -156,11 +162,13 @@ internal sealed class NotesForm : ResizableNoteWindow
             if (args.CloseReason == CloseReason.UserClosing && Visible && editors.Count > 0)
             {
                 args.Cancel = true;
+                SaveListWindowPlacement();
                 Hide();
                 return;
             }
 
             args.Cancel = !ResolveChanges() || !RememberWindowPlacements(notes, this);
+            if (!args.Cancel && Visible) SaveListWindowPlacement();
         };
         FormClosed += (_, _) => CloseEditors();
         SystemEvents.UserPreferenceChanged += SystemPreferenceChanged;
@@ -313,6 +321,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         try
         {
             preferences = store.LoadPreferences();
+            preferencesLoaded = true;
         }
         catch (Exception error) when (IsStorageError(error))
         {
@@ -330,6 +339,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         {
             store.SavePreferences(updated);
             preferences = updated;
+            preferencesLoaded = true;
         }
         catch (Exception error) when (IsStorageError(error))
         {
@@ -337,6 +347,27 @@ internal sealed class NotesForm : ResizableNoteWindow
         }
 
         ApplyTheme();
+    }
+
+    private void SaveListWindowPlacement()
+    {
+        // Leave an unreadable settings file intact unless the user explicitly changes a preference.
+        if (!preferencesLoaded) return;
+        NoteWindowPlacement placement = GetWindowPlacement();
+        if (placement == preferences.ListWindowPlacement) return;
+
+        var updated = preferences with { ListWindowPlacement = placement };
+        try
+        {
+            store.SavePreferences(updated);
+            preferences = updated;
+        }
+        catch (Exception error) when (IsStorageError(error))
+        {
+            string message = $"Could not save the notes list window position. {error.Message}";
+            settings.SetNotice(message);
+            SetStatus(message, showNotice: true);
+        }
     }
 
     private void SystemPreferenceChanged(object? sender, UserPreferenceChangedEventArgs args)
