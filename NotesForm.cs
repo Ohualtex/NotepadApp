@@ -28,10 +28,6 @@ internal sealed class NotesForm : ResizableNoteWindow
     private readonly BufferedNoteList noteList = new()
     {
         Dock = DockStyle.Fill,
-        BorderStyle = BorderStyle.None,
-        IntegralHeight = false,
-        DrawMode = DrawMode.OwnerDrawVariable,
-        DisplayMember = nameof(Note.DisplayTitle),
         AccessibleName = "Notes"
     };
     private readonly NoteButton add = new() { AccessibleName = "New note", Dock = DockStyle.Fill };
@@ -53,7 +49,8 @@ internal sealed class NotesForm : ResizableNoteWindow
     private string searchQuery = "";
     private int hoveredCard = -1;
     private bool cardPressed;
-    private bool measuringCards;
+    private int measuredCardWidth;
+    private bool pointerOverCards;
 
     public NotesForm(NoteStore store)
     {
@@ -64,7 +61,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         Size = new Size(420, 570);
         MinimumSize = new Size(320, 360);
         StartPosition = FormStartPosition.CenterScreen;
-        Padding = new Padding(5, 0, 5, 5);
+        Padding = new Padding(5, 0, 3, 5);
         workspace = BuildWorkspace();
         settings = new NotesSettingsView(ShowNotes, Close, save, reload,
             mode => ChangePreferences(preferences with { Theme = mode }),
@@ -95,27 +92,32 @@ internal sealed class NotesForm : ResizableNoteWindow
         {
             if (cardMenuNote is not Note note) return;
             cardMenuNote = null;
-            if (!noteList.IsDisposed) InvalidateCard(noteList.Items.IndexOf(note));
+            if (!noteList.IsDisposed) InvalidateCard(noteList.IndexOf(note));
         };
         LoadPreferences();
 
         noteList.ClientSizeChanged += (_, _) => UpdateCardHeights();
-        noteList.HandleCreated += (_, _) => UpdateCardHeights();
+        noteList.HandleCreated += (_, _) => UpdateCardHeights(force: true);
+        noteList.MouseEnter += (_, _) => pointerOverCards = true;
+        noteList.ViewportScrolled += (_, _) =>
+        {
+            if (pointerOverCards)
+                SetCardHover(noteList.IndexFromPoint(noteList.PointToClient(Cursor.Position)), pressed: false);
+        };
         noteList.DrawItem += DrawNoteCard;
         noteList.MouseMove += (_, args) => SetCardHover(noteList.IndexFromPoint(args.Location), (args.Button & MouseButtons.Left) != 0);
         noteList.MouseDown += (_, args) => SetCardHover(noteList.IndexFromPoint(args.Location), args.Button == MouseButtons.Left);
         noteList.MouseUp += (_, args) => SetCardHover(noteList.IndexFromPoint(args.Location), pressed: false);
-        noteList.MouseLeave += (_, _) => SetCardHover(-1, pressed: false);
+        noteList.MouseLeave += (_, _) =>
+        {
+            pointerOverCards = false;
+            SetCardHover(-1, pressed: false);
+        };
         noteList.MouseClick += (_, args) =>
         {
             if (args.Button == MouseButtons.Left) OpenCardAt(args.Location);
         };
-        noteList.KeyDown += (_, args) =>
-        {
-            if (args.KeyCode != Keys.Enter || noteList.SelectedItem is not Note note) return;
-            args.SuppressKeyPress = true;
-            OpenEditor(note);
-        };
+        noteList.NoteActivated += OpenEditor;
         search.TextChanged += (_, _) =>
         {
             searchQuery = search.Text.Trim();
@@ -277,10 +279,10 @@ internal sealed class NotesForm : ResizableNoteWindow
         searchRow.Controls.Add(magnifier, 0, 0);
         searchRow.Controls.Add(searchInput, 1, 0);
         searchRow.Controls.Add(clearSearch, 2, 0);
-        searchRow.Margin = new Padding(10, 0, 10, 10);
+        searchRow.Margin = new Padding(10, 0, 14, 10);
         layout.Controls.Add(searchRow, 0, 2);
 
-        var results = new Panel { Dock = DockStyle.Fill, Margin = new Padding(10, 0, 10, 0) };
+        var results = new Panel { Dock = DockStyle.Fill, Margin = new Padding(10, 0, 0, 0) };
         results.Controls.Add(noteList);
         results.Controls.Add(noResults);
         layout.Controls.Add(results, 0, 3);
@@ -301,7 +303,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private void ShowNotes()
     {
         settings.Hide();
-        Padding = new Padding(5, 0, 5, 5);
+        Padding = new Padding(5, 0, 3, 5);
         workspace.Show();
         settingsButton.Focus();
     }
@@ -447,8 +449,6 @@ internal sealed class NotesForm : ResizableNoteWindow
 
     private void DrawNoteCard(object? sender, DrawItemEventArgs args)
     {
-        using var listBackground = new SolidBrush(noteList.BackColor);
-        args.Graphics.FillRectangle(listBackground, args.Bounds);
         if (args.Index < 0 || args.Index >= noteList.Items.Count) return;
         var note = (Note)noteList.Items[args.Index];
         Rectangle card = Rectangle.Inflate(args.Bounds, -2, -4);
@@ -551,31 +551,20 @@ internal sealed class NotesForm : ResizableNoteWindow
         return height + lineHeight * availableLines;
     }
 
-    private void UpdateCardHeights()
+    private int[] MeasureCardHeights(IReadOnlyList<Note> visible)
     {
-        if (!noteList.IsHandleCreated || noteList.Items.Count == 0 || measuringCards) return;
-        measuringCards = true;
-        try
-        {
-            int top = noteList.TopIndex;
-            noteList.BeginUpdate();
-            try
-            {
-                using Graphics graphics = noteList.CreateGraphics();
-                int width;
-                do
-                {
-                    width = noteList.ClientSize.Width;
-                    for (int index = 0; index < noteList.Items.Count; index++)
-                        noteList.SetRowHeight(index, MeasureCardHeight(graphics, (Note)noteList.Items[index], width));
-                    // A newly visible native scrollbar can reduce the client width.
-                } while (noteList.ClientSize.Width < width);
+        measuredCardWidth = noteList.CardWidth;
+        using Graphics graphics = noteList.CreateGraphics();
+        var heights = new int[visible.Count];
+        for (int index = 0; index < visible.Count; index++)
+            heights[index] = MeasureCardHeight(graphics, visible[index], measuredCardWidth);
+        return heights;
+    }
 
-                noteList.TopIndex = top;
-            }
-            finally { noteList.EndUpdate(); }
-        }
-        finally { measuringCards = false; }
+    private void UpdateCardHeights(bool force = false)
+    {
+        if (!noteList.IsHandleCreated || noteList.Items.Count == 0 || (!force && measuredCardWidth == noteList.CardWidth)) return;
+        noteList.SetHeights(MeasureCardHeights(noteList.Items));
     }
 
     private void DrawSearchText(Graphics graphics, string text, Rectangle bounds, Font font, Color foreground, bool singleLine)
@@ -640,30 +629,16 @@ internal sealed class NotesForm : ResizableNoteWindow
     private void RefreshList(Note? selection, bool resetScroll = false)
     {
         cardMenu.Close();
-        int previousTop = resetScroll ? 0 : noteList.TopIndex;
+        int offset = resetScroll ? 0 : noteList.ScrollOffset;
         SetCardHover(-1, pressed: false);
         var visibleNotes = notes.Where(note => NoteSearch.Matches(note, searchQuery))
             .OrderByDescending(note => note.UpdatedAt).ToArray();
-        noteList.BeginUpdate();
-        try
-        {
-            noteList.Items.Clear();
-            noteList.Items.AddRange(visibleNotes);
-            if (visibleNotes.Length > 0)
-            {
-                noteList.SelectedItem = visibleNotes.Contains(selection) ? selection : visibleNotes[0];
-                noteList.TopIndex = Math.Clamp(previousTop, 0, visibleNotes.Length - 1);
-            }
+        Note? selected = visibleNotes.Contains(selection) ? selection : visibleNotes.FirstOrDefault();
 
-            noteList.Visible = visibleNotes.Length > 0;
-            noResults.Text = searchQuery.Length == 0 ? "No notes yet." : "No matching notes.";
-            noResults.Visible = visibleNotes.Length == 0;
-        }
-        finally
-        {
-            noteList.EndUpdate();
-        }
-        UpdateCardHeights();
+        noteList.SetCards(visibleNotes, MeasureCardHeights(visibleNotes), selected, offset);
+        noteList.Visible = visibleNotes.Length > 0;
+        noResults.Text = searchQuery.Length == 0 ? "No notes yet." : "No matching notes.";
+        noResults.Visible = visibleNotes.Length == 0;
     }
 
     private void OpenEditor(Note note)
@@ -766,7 +741,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         var note = new Note { CreatedAt = now, UpdatedAt = now };
         notes.Insert(0, note);
         RefreshList(note);
-        noteList.TopIndex = 0;
+        noteList.ScrollTo(0);
         SetDirty();
         OpenEditor(note);
     }
@@ -774,13 +749,12 @@ internal sealed class NotesForm : ResizableNoteWindow
     private void EditNote(Note note, string title, string content, string? richText)
     {
         if (note.Title == title && note.Content == content && note.RichText == richText) return;
-        bool titleChanged = note.Title != title;
         note.Title = title;
         note.Content = content;
         note.RichText = richText;
         DateTimeOffset now = DateTimeOffset.UtcNow;
         note.UpdatedAt = now < note.CreatedAt ? note.CreatedAt : now;
-        int index = noteList.Items.IndexOf(note);
+        int index = noteList.IndexOf(note);
         if ((index >= 0) != NoteSearch.Matches(note, searchQuery))
         {
             RefreshList(noteList.SelectedItem as Note);
@@ -793,9 +767,8 @@ internal sealed class NotesForm : ResizableNoteWindow
             }
             else
             {
-                if (titleChanged) noteList.Items[index] = note;
                 using Graphics graphics = noteList.CreateGraphics();
-                noteList.SetRowHeight(index, MeasureCardHeight(graphics, note, noteList.ClientSize.Width));
+                noteList.SetRowHeight(index, MeasureCardHeight(graphics, note, noteList.CardWidth));
                 noteList.Invalidate();
             }
         }
