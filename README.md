@@ -32,20 +32,20 @@ The app uses C#, Windows Forms, and the .NET standard library.
 - Search by title or text with **Ctrl+F**. Matches are highlighted in the cards, including rich-text previews. Press **Esc** while the search box has focus to clear it.
 - Use the formatting toolbar for bold, italic, underline, strikethrough, and bullets. Use the image icon to insert a picture at the cursor.
 - Open **⋯** for note colors, **Notes list**, and **Delete note**.
-- Open the gear in the list to choose **Light**, **Dark**, or **System** and control whether deleting a note asks for confirmation. **Local storage** contains **Save all**, **Reload**, and **Export all notes (.txt)**.
+- Open **Settings → General** to control delete confirmation. Under **Color**, choose **Light**, **Dark**, or **Use Windows theme**.
 
 ## Local storage
 
-Changes save automatically after a short pause. Use **Settings → Local storage → Save all** to write changes immediately or retry after an error.
+Changes save automatically after a short pause.
 
-To export all notes, open **Settings → Local storage → Export all notes (.txt)**. The app writes all note titles and plain text to one UTF-8 file in last-edited order, including notes hidden by a search.
+To export all notes, open **Settings → Other → Export all notes (.txt)**. The app writes all note titles and plain text to one UTF-8 file in last-edited order, including notes hidden by a search.
 
 | File | Contents |
 | --- | --- |
 | `%LOCALAPPDATA%\NotepadApp\notes.json` | Note text, formatting, embedded images, colors, timestamps, and window positions and sizes |
 | `%LOCALAPPDATA%\NotepadApp\settings.json` | Theme, delete confirmation, and the position and size of the notes list window |
 
-If the notes file cannot be read, NotepadApp reports the error and disables saving. Repair the file or move it to a backup location, then choose **Settings → Local storage → Reload**.
+If the notes file cannot be read, NotepadApp reports the error and disables saving. Repair the file or move it to a backup location, then reopen NotepadApp.
 
 ## Project structure
 
