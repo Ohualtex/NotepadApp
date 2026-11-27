@@ -29,6 +29,9 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Visible = false };
     private readonly Panel writingArea = new() { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(12, 6, 9, 4) };
     private readonly NoteOptionsPanel drawer;
+    private readonly System.Windows.Forms.Timer drawerTimer = new() { Interval = 15 };
+    private bool drawerOpen;
+    private int visibleDrawerHeight;
     private readonly NoteButton newNote = new() { AccessibleName = "New note", Dock = DockStyle.Fill };
     private readonly NoteButton options = new() { AccessibleName = "Note options", Dock = DockStyle.Fill };
     private readonly NoteButton close = new() { AccessibleName = "Close note", Dock = DockStyle.Fill };
@@ -96,6 +99,9 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         Controls.Add(formatTools);
         formatTools.BringToFront();
         headerViewport.BringToFront();
+        Controls.Add(drawer);
+        drawer.BringToFront();
+        drawerTimer.Tick += (_, _) => AdvanceDrawer();
         formatTools.Paint += (_, args) =>
         {
             using var separator = new SolidBrush(NoteButtonSurface.Blend(paper, this.theme.MutedInk, 13));
@@ -141,23 +147,21 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         options.Click += (_, _) => ToggleDrawer();
         content.MouseDown += (_, _) => CloseDrawer();
         contentHint.MouseDown += (_, _) => CloseDrawer();
-        writingArea.Resize += (_, _) =>
-        {
-            if (drawer.Visible) drawer.FitTo(writingArea.ClientSize);
-        };
+
         newNote.Click += (_, _) => addNote();
         close.Click += (_, _) => Close();
         ApplyTheme(theme);
         Disposed += (_, _) =>
         {
             headerTimer.Dispose();
+            drawerTimer.Dispose();
             formatToolTip.Dispose();
         };
     }
 
     protected override bool ProcessCmdKey(ref Message message, Keys keyData)
     {
-        if (keyData == Keys.Escape && drawer.Visible)
+        if (keyData == Keys.Escape && drawerOpen)
         {
             CloseDrawer();
             return true;
@@ -168,23 +172,48 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
 
     private void ToggleDrawer()
     {
-        if (drawer.Visible)
+        if (drawerOpen)
         {
             CloseDrawer();
             return;
         }
 
-        drawer.FitTo(writingArea.ClientSize);
+        drawerOpen = true;
+        LayoutDrawer();
         drawer.Show();
         drawer.BringToFront();
-        drawer.FocusSelection();
+        formatTools.Enabled = false;
+        drawerTimer.Start();
     }
 
     private void CloseDrawer(bool restoreFocus = true)
     {
-        if (!drawer.Visible) return;
-        drawer.Hide();
+        if (!drawerOpen) return;
+        drawerOpen = false;
+        formatTools.Enabled = content.Enabled;
         if (restoreFocus) content.Focus();
+        drawerTimer.Start();
+    }
+
+    private void AdvanceDrawer()
+    {
+        int target = drawerOpen ? drawer.Height : 0;
+        int step = Math.Max(1, (drawer.Height + 8) / 9);
+        visibleDrawerHeight += Math.Clamp(target - visibleDrawerHeight, -step, step);
+        drawer.Top = visibleDrawerHeight - drawer.Height;
+        if (visibleDrawerHeight != target) return;
+
+        drawerTimer.Stop();
+        if (drawerOpen) drawer.FocusSelection();
+        else drawer.Hide();
+    }
+
+    private void LayoutDrawer()
+    {
+        bool fullyOpen = drawerOpen && drawer.Visible && visibleDrawerHeight == drawer.Height;
+        drawer.FitTo(new Size(ClientSize.Width, Math.Max(0, ClientSize.Height - FormatToolbarHeight)));
+        visibleDrawerHeight = fullyOpen ? drawer.Height : Math.Min(visibleDrawerHeight, drawer.Height);
+        drawer.Location = new Point(0, visibleDrawerHeight - drawer.Height);
     }
 
     private void SetChromeVisible(bool visible)
@@ -215,6 +244,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     {
         PositionHeader();
         formatTools.Bounds = new Rectangle(0, ClientSize.Height - FormatToolbarHeight, ClientSize.Width, FormatToolbarHeight);
+        if (drawer.Visible) LayoutDrawer();
     }
 
     private void PositionHeader()
@@ -450,7 +480,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         writingArea.Controls.Add(content);
         writingArea.Controls.Add(contentHint);
         contentHint.BringToFront();
-        writingArea.Controls.Add(drawer);
         layout.Controls.Add(writingArea, 0, 1);
         layout.Controls.Add(status, 0, 2);
         return layout;
@@ -458,7 +487,8 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
 
     public void SetAvailability(bool storageReady, bool dirty)
     {
-        content.Enabled = newNote.Enabled = formatTools.Enabled = storageReady;
+        content.Enabled = newNote.Enabled = storageReady;
+        formatTools.Enabled = storageReady && !drawerOpen;
         drawer.SetAvailability(storageReady, dirty);
     }
 

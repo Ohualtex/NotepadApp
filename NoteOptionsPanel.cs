@@ -59,7 +59,7 @@ internal sealed class NoteOptionsPanel : UserControl
     public void FitTo(Size available)
     {
         int preferredHeight = rows.GetPreferredSize(new Size(available.Width, 0)).Height;
-        Bounds = new Rectangle(0, 0, available.Width, Math.Min(available.Height, preferredHeight));
+        Size = new Size(available.Width, Math.Min(available.Height, preferredHeight));
     }
 
     public void FocusSelection()
