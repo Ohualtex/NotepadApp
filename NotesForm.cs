@@ -17,6 +17,10 @@ internal sealed class NotesForm : ResizableNoteWindow
     private readonly Font listHeading = new("Segoe UI", 14, FontStyle.Bold);
     private readonly Font cardTitle = new("Segoe UI", 10, FontStyle.Bold);
     private readonly Font cardDate = new("Segoe UI", 8);
+    private readonly ContextMenuStrip cardMenu = new() { ShowImageMargin = false };
+    private readonly ToolStripMenuItem openCardAction = new("Open note");
+    private readonly ToolStripMenuItem deleteCardAction = new("Delete note");
+    private Note? cardMenuNote;
     private readonly NoteStore store;
     private readonly NotePreviewRenderer previewRenderer = new();
     private readonly System.Windows.Forms.Timer autoSave = new() { Interval = 700 };
@@ -78,6 +82,21 @@ internal sealed class NotesForm : ResizableNoteWindow
         clearSearch.SetCenteredIcon(NoteButtonIcons.Close);
         settingsButton.Click += (_, _) => ShowSettings();
         closeButton.Click += (_, _) => Close();
+        cardMenu.Items.AddRange([openCardAction, deleteCardAction]);
+        openCardAction.Click += (_, _) =>
+        {
+            if (openCardAction.Tag is Note note && notes.Contains(note)) OpenEditor(note);
+        };
+        deleteCardAction.Click += (_, _) =>
+        {
+            if (deleteCardAction.Tag is Note note) DeleteNote(this, note);
+        };
+        cardMenu.Closed += (_, _) =>
+        {
+            if (cardMenuNote is not Note note) return;
+            cardMenuNote = null;
+            if (!noteList.IsDisposed) InvalidateCard(noteList.Items.IndexOf(note));
+        };
         LoadPreferences();
 
         noteList.ClientSizeChanged += (_, _) => UpdateCardHeights();
@@ -89,9 +108,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         noteList.MouseLeave += (_, _) => SetCardHover(-1, pressed: false);
         noteList.MouseClick += (_, args) =>
         {
-            int index = noteList.IndexFromPoint(args.Location);
-            if (args.Button == MouseButtons.Left && index >= 0)
-                OpenEditor((Note)noteList.Items[index]);
+            if (args.Button == MouseButtons.Left) OpenCardAt(args.Location);
         };
         noteList.KeyDown += (_, args) =>
         {
@@ -118,6 +135,7 @@ internal sealed class NotesForm : ResizableNoteWindow
             listHeading.Dispose();
             cardTitle.Dispose();
             previewRenderer.Dispose();
+            cardMenu.Dispose();
             cardDate.Dispose();
         };
         add.Click += (_, _) => AddNote();
@@ -335,6 +353,12 @@ internal sealed class NotesForm : ResizableNoteWindow
         ForeColor = workspace.ForeColor = noteList.ForeColor = search.ForeColor = theme.Ink;
         search.BackColor = searchRow.BackColor = theme.Control;
         searchHint.ForeColor = theme.MutedInk;
+        cardMenu.Renderer = new ToolStripProfessionalRenderer(new CardMenuColors(theme)) { RoundedEdges = false };
+        cardMenu.BackColor = theme.Surface;
+        openCardAction.ForeColor = theme.Surface.GetBrightness() < 0.5f ? theme.Ink : Color.Black;
+        deleteCardAction.ForeColor = theme.Surface.GetBrightness() < 0.5f
+            ? Color.FromArgb(251, 177, 180)
+            : Color.FromArgb(151, 49, 54);
         foreach (NoteButton button in new[] { add, settingsButton, closeButton })
             StyleHeaderButton(button, theme);
         StyleHeaderButton(clearSearch, theme);
@@ -383,6 +407,44 @@ internal sealed class NotesForm : ResizableNoteWindow
             noteList.Invalidate(noteList.GetItemRectangle(index));
     }
 
+    private void OpenCardAt(Point point)
+    {
+        int index = noteList.IndexFromPoint(point);
+        if (index < 0) return;
+
+        var note = (Note)noteList.Items[index];
+        Rectangle row = noteList.GetItemRectangle(index);
+        using Graphics graphics = noteList.CreateGraphics();
+        Rectangle actions = GetCardActionsBounds(row, GetLineHeight(cardDate, graphics));
+        if (!actions.Contains(point))
+        {
+            OpenEditor(note);
+            return;
+        }
+
+        cardMenuNote = note;
+        openCardAction.Tag = deleteCardAction.Tag = note;
+        deleteCardAction.Enabled = storageReady;
+        InvalidateCard(index);
+        cardMenu.Show(noteList, new Point(actions.Right, actions.Bottom), ToolStripDropDownDirection.BelowLeft);
+    }
+
+    private static Rectangle GetCardActionsBounds(Rectangle row, int metadataHeight)
+    {
+        const int rightInset = 14;
+        const int topInset = 12;
+        int width = Math.Min(row.Width - 2 * rightInset, Math.Max(30, metadataHeight * 2));
+        return new Rectangle(row.Right - rightInset - width, row.Top + topInset, width, metadataHeight);
+    }
+
+    private sealed class CardMenuColors(NotesTheme theme) : ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground => theme.Surface;
+        public override Color MenuBorder => theme.HeaderPressed;
+        public override Color MenuItemBorder => theme.HeaderHover;
+        public override Color MenuItemSelected => theme.HeaderHover;
+    }
+
     private void DrawNoteCard(object? sender, DrawItemEventArgs args)
     {
         using var listBackground = new SolidBrush(noteList.BackColor);
@@ -413,8 +475,16 @@ internal sealed class NotesForm : ResizableNoteWindow
         Rectangle text = Rectangle.Inflate(card, -12, -8);
         int metadataHeight = GetLineHeight(cardDate, args.Graphics);
         const TextFormatFlags dateFlags = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.Right;
-        TextRenderer.DrawText(args.Graphics, GetCardTimestamp(note.CreatedAt, DateTimeOffset.UtcNow), cardDate,
-            new Rectangle(text.Left, text.Top, text.Width, metadataHeight), theme.MutedInk, dateFlags);
+        if (hoveredCard == args.Index || ReferenceEquals(cardMenuNote, note))
+        {
+            TextRenderer.DrawText(args.Graphics, "⋯", Font, GetCardActionsBounds(args.Bounds, metadataHeight),
+                theme.MutedInk, TextFormatFlags.SingleLine | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+        else
+        {
+            TextRenderer.DrawText(args.Graphics, GetCardTimestamp(note.CreatedAt, DateTimeOffset.UtcNow), cardDate,
+                new Rectangle(text.Left, text.Top, text.Width, metadataHeight), theme.MutedInk, dateFlags);
+        }
 
         var (title, preview, placeholder) = GetCardText(note);
         int previewTop = text.Top + metadataHeight + 4;
@@ -569,6 +639,7 @@ internal sealed class NotesForm : ResizableNoteWindow
 
     private void RefreshList(Note? selection, bool resetScroll = false)
     {
+        cardMenu.Close();
         int previousTop = resetScroll ? 0 : noteList.TopIndex;
         SetCardHover(-1, pressed: false);
         var visibleNotes = notes.Where(note => NoteSearch.Matches(note, searchQuery))
@@ -740,14 +811,15 @@ internal sealed class NotesForm : ResizableNoteWindow
         SetDirty();
     }
 
-    private void DeleteNote(NoteEditorForm editor, Note note)
+    private void DeleteNote(IWin32Window owner, Note note)
     {
-        if (preferences.ConfirmBeforeDeleting && MessageBox.Show(editor, $"Delete “{note.DisplayTitle}”?", "Delete note", MessageBoxButtons.YesNo,
+        int index = notes.IndexOf(note);
+        if (index < 0 || !storageReady) return;
+        if (preferences.ConfirmBeforeDeleting && MessageBox.Show(owner, $"Delete “{note.DisplayTitle}”?", "Delete note", MessageBoxButtons.YesNo,
             MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
-        int index = notes.IndexOf(note);
         notes.RemoveAt(index);
-        editor.Close();
+        if (editors.TryGetValue(note.Id, out var editor)) editor.Close();
         RefreshList(notes.Count == 0 ? null : notes[Math.Min(index, notes.Count - 1)]);
         SetDirty();
     }
