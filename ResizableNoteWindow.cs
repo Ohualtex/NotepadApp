@@ -38,13 +38,25 @@ internal class ResizableNoteWindow : Form
     protected override void OnMouseDown(MouseEventArgs args)
     {
         base.OnMouseDown(args);
-        if (args.Button != MouseButtons.Left) return;
+        if (args.Button == MouseButtons.Left) StartResize(args.Location);
+    }
 
-        resizeEdge = EdgeAt(args.Location);
-        if (resizeEdge == ResizeEdge.None) return;
+    protected void ConfigureResizeSurface(Control surface)
+    {
+        Point InWindow(Point point) => PointToClient(surface.PointToScreen(point));
+        surface.MouseMove += (_, args) => surface.Cursor = ResizeCursor(EdgeAt(InWindow(args.Location)));
+        surface.MouseDown += (_, args) =>
+        {
+            if (args.Button == MouseButtons.Left) StartResize(InWindow(args.Location));
+        };
+    }
 
-        BeginResize(resizeEdge, PointToScreen(args.Location));
-        Cursor = ResizeCursor(resizeEdge);
+    private void StartResize(Point point)
+    {
+        ResizeEdge edge = EdgeAt(point);
+        if (edge == ResizeEdge.None) return;
+        BeginResize(edge, PointToScreen(point));
+        Cursor = ResizeCursor(edge);
         Capture = true;
     }
 

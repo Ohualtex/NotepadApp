@@ -36,9 +36,14 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private readonly Dictionary<FontStyle, CheckBox> styleButtons = [];
     private readonly NoteToggleButton bullets = CreateFormatButton("", "Bulleted list");
     private readonly NoteButton insertImage = new() { AccessibleName = "Insert image" };
-    private const int FormatToolWidth = 40;
-    private const int FormatToolbarHeight = 38;
-    private readonly FlowLayoutPanel formatTools = new() { Dock = DockStyle.Fill, Margin = Padding.Empty, WrapContents = false };
+    private const int FormatToolWidth = 44;
+    private const int FormatToolbarHeight = 44;
+    private const int FormatToolbarInset = 5;
+    private readonly FlowLayoutPanel formatTools = new()
+    {
+        Visible = false, Margin = Padding.Empty, WrapContents = false,
+        Padding = new Padding(0, FormatToolbarInset, 0, FormatToolbarInset)
+    };
 
     public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string?> edit, Func<bool> saveNotes,
         Action<NoteEditorForm, Note> deleteNote, Action<NoteEditorForm, Note> exportNote, Action<Note, string> changeAccent,
@@ -88,10 +93,18 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         Controls.Add(BuildWorkspace());
         headerViewport.Controls.Add(header);
         Controls.Add(headerViewport);
+        Controls.Add(formatTools);
+        formatTools.BringToFront();
         headerViewport.BringToFront();
-        Resize += (_, _) => PositionHeader();
+        formatTools.Paint += (_, args) =>
+        {
+            using var separator = new SolidBrush(NoteButtonSurface.Blend(paper, this.theme.MutedInk, 13));
+            args.Graphics.FillRectangle(separator, 0, 0, formatTools.ClientSize.Width, 1);
+        };
+        ConfigureResizeSurface(formatTools);
+        Resize += (_, _) => PositionToolbars();
         headerTimer.Tick += (_, _) => AdvanceHeader();
-        PositionHeader();
+        PositionToolbars();
         // Adding the editor to the form applies its inherited font before RTF is loaded.
         LoadContent(note);
         ApplyTheme(theme);
@@ -198,6 +211,12 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         }
     }
 
+    private void PositionToolbars()
+    {
+        PositionHeader();
+        formatTools.Bounds = new Rectangle(0, ClientSize.Height - FormatToolbarHeight, ClientSize.Width, FormatToolbarHeight);
+    }
+
     private void PositionHeader()
     {
         headerViewport.Bounds = new Rectangle(0, 0, ClientSize.Width, HeaderHeight);
@@ -242,19 +261,20 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     {
         headerViewport.BackColor = paper;
         header.BackColor = chrome;
-        formatTools.BackColor = chromeVisible ? chrome : paper;
+        formatTools.BackColor = paper;
         Color contrast = chrome.GetBrightness() < 0.5f ? Color.White : Color.Black;
         Color hover = NoteButtonSurface.Blend(chrome, contrast, 10);
         Color pressed = NoteButtonSurface.Blend(chrome, contrast, 17);
-        Color selected = NoteButtonSurface.Blend(chrome, contrast, 24);
+        Color toolInk = NoteButtonSurface.Blend(theme.MutedInk, paper, 13);
         foreach (ButtonBase button in formatTools.Controls)
         {
-            button.BackColor = chrome;
-            button.ForeColor = theme.Ink;
-            button.FlatAppearance.MouseOverBackColor = hover;
-            button.FlatAppearance.MouseDownBackColor = pressed;
-            button.FlatAppearance.CheckedBackColor = selected;
+            button.BackColor = paper;
+            button.ForeColor = toolInk;
+            button.FlatAppearance.MouseOverBackColor = NoteButtonSurface.Blend(paper, contrast, 8);
+            button.FlatAppearance.MouseDownBackColor = NoteButtonSurface.Blend(paper, contrast, 14);
+            button.FlatAppearance.CheckedBackColor = NoteButtonSurface.Blend(paper, contrast, 19);
         }
+        formatTools.Invalidate();
 
         foreach (NoteButton button in new[] { newNote, options, close })
         {
@@ -314,7 +334,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     {
         var styles = new[] {
             (FontStyle.Bold, "B", "Bold"), (FontStyle.Italic, "I", "Italic"),
-            (FontStyle.Underline, "U", "Underline"), (FontStyle.Strikeout, "S", "Strikethrough")
+            (FontStyle.Underline, "U", "Underline"), (FontStyle.Strikeout, "ab", "Strikethrough")
         };
 
         foreach (var (style, label, description) in styles)
@@ -352,7 +372,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         {
             using var brush = new SolidBrush(ink);
             using var pen = new Pen(ink, 1.2f);
-            for (int y = -5; y <= 5; y += 5)
+            for (int y = -6; y <= 6; y += 4)
             {
                 graphics.FillEllipse(brush, -8, y - 1, 2, 2);
                 graphics.DrawLine(pen, -3, y, 8, y);
@@ -379,7 +399,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     {
         NotesForm.StyleButton(button);
         button.AutoSize = false;
-        button.Size = new Size(FormatToolWidth, FormatToolbarHeight);
+        button.Size = new Size(FormatToolWidth, FormatToolbarHeight - 2 * FormatToolbarInset);
         button.Margin = Padding.Empty;
         button.Padding = Padding.Empty;
         formatToolTip.SetToolTip(button, button.AccessibleName);
@@ -401,7 +421,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderHeight - TopResizeGrip));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, FormatToolbarHeight));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, FormatToolbarHeight - FormatToolbarInset));
 
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, HeaderHeight));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -433,7 +453,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         writingArea.Controls.Add(drawer);
         layout.Controls.Add(writingArea, 0, 1);
         layout.Controls.Add(status, 0, 2);
-        layout.Controls.Add(formatTools, 0, 3);
         return layout;
     }
 
