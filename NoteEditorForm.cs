@@ -28,8 +28,11 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private readonly Label titleCaption = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty };
     private const int HeaderHeight = 40;
     private const int TopResizeGrip = 5;
-    private readonly RowStyle headerRow = new(SizeType.Absolute, HeaderHeight - TopResizeGrip);
-    private readonly TableLayoutPanel header = new() { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
+    private const int HeaderStep = 5;
+    private int visibleHeaderHeight;
+    private readonly System.Windows.Forms.Timer headerTimer = new() { Interval = 15 };
+    private readonly Panel headerViewport = new() { Visible = false, Margin = Padding.Empty };
+    private readonly TableLayoutPanel header = new() { ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
     private readonly Label contentHint = new() { Text = "Write a note…", AutoSize = true, Location = new Point(12, 6), Visible = false };
     private readonly Label status = new() { Dock = DockStyle.Fill, AutoSize = true, Visible = false };
     private readonly Panel writingArea = new() { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(12, 6, 9, 4) };
@@ -91,6 +94,12 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         };
         drawer.SetDates(note);
         Controls.Add(BuildWorkspace());
+        headerViewport.Controls.Add(header);
+        Controls.Add(headerViewport);
+        headerViewport.BringToFront();
+        Resize += (_, _) => PositionHeader();
+        headerTimer.Tick += (_, _) => AdvanceHeader();
+        PositionHeader();
         // Adding the editor to the form applies its inherited font before RTF is loaded.
         LoadContent(note);
         ApplyTheme(theme);
@@ -144,7 +153,11 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         newNote.Click += (_, _) => addNote();
         close.Click += (_, _) => Close();
         ApplyTheme(theme);
-        Disposed += (_, _) => formatToolTip.Dispose();
+        Disposed += (_, _) =>
+        {
+            headerTimer.Dispose();
+            formatToolTip.Dispose();
+        };
     }
 
     protected override bool ProcessCmdKey(ref Message message, Keys keyData)
@@ -205,16 +218,35 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private void SetChromeVisible(bool visible)
     {
         chromeVisible = visible;
-        Padding = new Padding(Padding.Left, visible ? 0 : TopResizeGrip, Padding.Right, Padding.Bottom);
-        headerRow.Height = visible ? HeaderHeight : HeaderHeight - TopResizeGrip;
-        header.Visible = formatTools.Visible = visible;
+        formatTools.Visible = visible;
         if (!visible)
         {
             CloseDrawer(restoreFocus: false);
             EndTitleEdit();
         }
+        if (visible) headerViewport.Show();
+        if (visibleHeaderHeight != (visible ? HeaderHeight : 0)) headerTimer.Start();
         UpdateContentHint();
         PaintChrome();
+    }
+
+    private void AdvanceHeader()
+    {
+        int target = chromeVisible ? HeaderHeight : 0;
+        int distance = target - visibleHeaderHeight;
+        visibleHeaderHeight += Math.Clamp(distance, -HeaderStep, HeaderStep);
+        PositionHeader();
+        if (visibleHeaderHeight == target)
+        {
+            headerTimer.Stop();
+            if (!chromeVisible) headerViewport.Hide();
+        }
+    }
+
+    private void PositionHeader()
+    {
+        headerViewport.Bounds = new Rectangle(0, 0, ClientSize.Width, HeaderHeight);
+        header.Bounds = new Rectangle(0, visibleHeaderHeight - HeaderHeight, headerViewport.Width, HeaderHeight);
     }
 
     private void UpdateContentHint() => contentHint.Visible = chromeVisible && content.TextLength == 0;
@@ -255,7 +287,9 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
 
     private void PaintChrome()
     {
-        header.BackColor = formatTools.BackColor = chromeVisible ? chrome : paper;
+        headerViewport.BackColor = paper;
+        header.BackColor = chrome;
+        formatTools.BackColor = chromeVisible ? chrome : paper;
         foreach (ButtonBase button in formatTools.Controls)
         {
             button.BackColor = chrome;
@@ -410,7 +444,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     {
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(headerRow);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderHeight - TopResizeGrip));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
@@ -441,7 +475,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
 
         formatTools.Margin = Padding.Empty;
         formatTools.WrapContents = false;
-        layout.Controls.Add(header, 0, 0);
 
         content.Margin = Padding.Empty;
         writingArea.Controls.Add(content);
