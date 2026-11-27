@@ -31,12 +31,14 @@ The app uses C#, Windows Forms, and the .NET standard library.
 - Closing the list leaves open notes on your desktop. Use **⋯ → Notes list** from a post-it to bring it back.
 - Search by title or text with **Ctrl+F**. Matches are highlighted in the cards, including rich-text previews. Press **Esc** while the search box has focus to clear it.
 - Use the formatting toolbar for bold, italic, underline, strikethrough, and bullets. Use the image icon to insert a picture at the cursor.
-- Open **⋯** for note colors, **Save all**, **Export .txt**, and **Delete note**. The export contains a title line and the note's plain text in UTF-8.
-- Open the gear in the list to choose **Light**, **Dark**, or **System** and control whether deleting a note asks for confirmation. **Local storage** contains **Save all** and **Reload**.
+- Open **⋯** for note colors, **Notes list**, and **Delete note**.
+- Open the gear in the list to choose **Light**, **Dark**, or **System** and control whether deleting a note asks for confirmation. **Local storage** contains **Save all**, **Reload**, and **Export all notes (.txt)**.
 
 ## Local storage
 
-Changes save automatically after a short pause. Use **Save all** to write changes immediately or retry after an error.
+Changes save automatically after a short pause. Use **Settings → Local storage → Save all** to write changes immediately or retry after an error.
+
+To export all notes, open **Settings → Local storage → Export all notes (.txt)**. The app writes all note titles and plain text to one UTF-8 file in last-edited order, including notes hidden by a search.
 
 | File | Contents |
 | --- | --- |
