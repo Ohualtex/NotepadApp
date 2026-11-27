@@ -8,9 +8,7 @@ NotepadApp is a Windows desktop app for keeping sticky notes. Write in independe
 
 ## Download for Windows
 
-Download [NotepadApp v0.0.1 for Windows x64](https://github.com/Ohualtex/NotepadApp/releases/download/v0.0.1/NotepadApp-v0.0.1-win-x64.zip), extract the entire ZIP, and open `NotepadApp.exe`. The package includes the .NET runtime.
-
-The `main` branch includes updates made after v0.0.1. To try the latest changes, run from source.
+Open the [latest release](https://github.com/Ohualtex/NotepadApp/releases/latest). Under **Assets**, download the file ending in `-win-x64.zip`. Extract the entire ZIP, then open `NotepadApp.exe`. The package includes the .NET runtime.
 
 ## Run from source
 
