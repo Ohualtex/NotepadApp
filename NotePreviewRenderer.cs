@@ -38,6 +38,33 @@ internal sealed class NotePreviewRenderer : IDisposable
         return true;
     }
 
+    public int MeasureHeight(Graphics graphics, Note note, string query, Font font, int width, int lineHeight, int maxLines)
+    {
+        if (string.IsNullOrEmpty(note.RichText)) return 0;
+        editor ??= new RichTextBox { BorderStyle = BorderStyle.None, DetectUrls = false };
+        editor.Font = font;
+        int widthTwips = ToTwips(width, graphics.DpiX);
+        int maxHeight = lineHeight * maxLines;
+        string rtf = NoteImage.FitPreview(note.RichText, widthTwips, ToTwips(maxHeight, graphics.DpiY), out int tallestPicture);
+        if (!NoteRichContent.TryLoad(editor, note, rtf) || editor.TextLength == 0) return 0;
+
+        int start = FindPreviewStart(editor.Text, query, out _, out _);
+        int indent = start > 0 ? ToTwips(TextRenderer.MeasureText("…", font).Width, graphics.DpiX) : 0;
+        // Rich Edit can report an inline image as consumed even when the page clips it.
+        int pictureLines = (int)Math.Ceiling(tallestPicture * (double)graphics.DpiY / TwipsPerInch / lineHeight);
+        for (int lines = Math.Max(1, pictureLines); lines < maxLines; lines++)
+        {
+            int height = lineHeight * lines;
+            int heightTwips = ToTwips(height, graphics.DpiY);
+            var page = new NativeRectangle(0, 0, widthTwips, heightTwips);
+            var area = new NativeRectangle(indent, 0, widthTwips, heightTwips);
+            if (RenderRange(editor, graphics, page, area, start, editor.TextLength, render: false) >= editor.TextLength)
+                return height;
+        }
+
+        return maxHeight;
+    }
+
     private Bitmap? Render(Note note, PreviewKey key, Color paper)
     {
         editor ??= new RichTextBox { BorderStyle = BorderStyle.None, DetectUrls = false };
@@ -47,7 +74,7 @@ internal sealed class NotePreviewRenderer : IDisposable
 
         int widthTwips = ToTwips(key.Size.Width, key.DpiX);
         int heightTwips = ToTwips(key.Size.Height, key.DpiY);
-        string rtf = NoteImage.FitPreview(key.RichText, widthTwips, heightTwips);
+        string rtf = NoteImage.FitPreview(key.RichText, widthTwips, heightTwips, out _);
         if (!NoteRichContent.TryLoad(editor, note, rtf)) return null;
 
         string text = editor.Text;
@@ -82,14 +109,8 @@ internal sealed class NotePreviewRenderer : IDisposable
 
     private static int ApplySearchHighlight(RichTextBox control, string text, string query, Color highlight)
     {
-        if (query.Length == 0) return 0;
-
-        int first = NoteSearch.Find(text, query, 0, out int length);
+        int start = FindPreviewStart(text, query, out int first, out int length);
         if (first < 0) return 0;
-
-        int start = Math.Max(0, first - 22);
-        int lineStart = first > 0 ? text.LastIndexOf('\n', first - 1) + 1 : 0;
-        start = Math.Max(start, lineStart);
 
         // Only paint matches near the portion that can appear in a card.
         int end = Math.Min(text.Length, first + Math.Max(320, length));
@@ -100,6 +121,16 @@ internal sealed class NotePreviewRenderer : IDisposable
         }
 
         return start;
+    }
+
+    private static int FindPreviewStart(string text, string query, out int first, out int length)
+    {
+        length = 0;
+        first = query.Length == 0 ? -1 : NoteSearch.Find(text, query, 0, out length);
+        if (first < 0) return 0;
+
+        int lineStart = first > 0 ? text.LastIndexOf('\n', first - 1) + 1 : 0;
+        return Math.Max(first - 22, lineStart);
     }
 
     private static void DrawEllipsis(Graphics graphics, PreviewKey key, Color paper, bool left)
@@ -114,7 +145,7 @@ internal sealed class NotePreviewRenderer : IDisposable
         TextRenderer.DrawText(graphics, text, key.Font, bounds, key.Ink, flags);
     }
 
-    private static int RenderRange(RichTextBox control, Graphics graphics, NativeRectangle page, NativeRectangle area, int start, int end)
+    private static int RenderRange(RichTextBox control, Graphics graphics, NativeRectangle page, NativeRectangle area, int start, int end, bool render = true)
     {
         nint window = control.Handle;
         nint device = graphics.GetHdc();
@@ -129,7 +160,7 @@ internal sealed class NotePreviewRenderer : IDisposable
                 Start = start,
                 End = end
             };
-            return (int)SendMessage(window, FormatRangeMessage, 1, ref range);
+            return (int)SendMessage(window, FormatRangeMessage, render ? 1 : 0, ref range);
         }
         finally
         {

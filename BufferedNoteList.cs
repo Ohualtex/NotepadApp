@@ -8,7 +8,18 @@ internal sealed class BufferedNoteList : ListBox
     private const int EraseBackgroundMessage = 0x0014;
     private const int PrintClientMessage = 0x0318;
     private const int PrintClient = 0x00000004;
+    private const int SetItemHeightMessage = 0x01A0;
     private nint paintDevice;
+
+    internal void SetRowHeight(int index, int height)
+    {
+        height = Math.Clamp(height, 1, 255);
+        if (GetItemHeight(index) != height)
+        {
+            var message = Message.Create(Handle, SetItemHeightMessage, index, height);
+            DefWndProc(ref message);
+        }
+    }
 
     protected override void WndProc(ref Message message)
     {

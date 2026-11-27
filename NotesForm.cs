@@ -26,7 +26,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         Dock = DockStyle.Fill,
         BorderStyle = BorderStyle.None,
         IntegralHeight = false,
-        DrawMode = DrawMode.OwnerDrawFixed,
+        DrawMode = DrawMode.OwnerDrawVariable,
         DisplayMember = nameof(Note.DisplayTitle),
         AccessibleName = "Notes"
     };
@@ -49,6 +49,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private string searchQuery = "";
     private int hoveredCard = -1;
     private bool cardPressed;
+    private bool measuringCards;
 
     public NotesForm(NoteStore store)
     {
@@ -79,7 +80,8 @@ internal sealed class NotesForm : ResizableNoteWindow
         closeButton.Click += (_, _) => Close();
         LoadPreferences();
 
-        noteList.ItemHeight = TextRenderer.MeasureText("Ag", Font).Height * 3 + 26;
+        noteList.ClientSizeChanged += (_, _) => UpdateCardHeights();
+        noteList.HandleCreated += (_, _) => UpdateCardHeights();
         noteList.DrawItem += DrawNoteCard;
         noteList.MouseMove += (_, args) => SetCardHover(noteList.IndexFromPoint(args.Location), (args.Button & MouseButtons.Left) != 0);
         noteList.MouseDown += (_, args) => SetCardHover(noteList.IndexFromPoint(args.Location), args.Button == MouseButtons.Left);
@@ -409,26 +411,101 @@ internal sealed class NotesForm : ResizableNoteWindow
         args.Graphics.SmoothingMode = previousSmoothing;
 
         Rectangle text = Rectangle.Inflate(card, -12, -8);
-        int line = TextRenderer.MeasureText("Ag", Font).Height;
-        string date = note.UpdatedAt.LocalDateTime.ToString("M");
-        const TextFormatFlags singleLine = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
-        int dateWidth = Math.Min(text.Width / 2, TextRenderer.MeasureText(date, cardDate).Width);
-        TextRenderer.DrawText(args.Graphics, date, cardDate,
-            new Rectangle(text.Right - dateWidth, text.Top + 2, dateWidth, line), theme.MutedInk, singleLine | TextFormatFlags.Right);
-        int firstRowWidth = Math.Max(0, text.Width - dateWidth - 8);
-        bool hasTitle = !string.IsNullOrWhiteSpace(note.Title);
-        if (hasTitle)
+        int metadataHeight = GetLineHeight(cardDate, args.Graphics);
+        const TextFormatFlags dateFlags = TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.Right;
+        TextRenderer.DrawText(args.Graphics, GetCardTimestamp(note.CreatedAt, DateTimeOffset.UtcNow), cardDate,
+            new Rectangle(text.Left, text.Top, text.Width, metadataHeight), theme.MutedInk, dateFlags);
+
+        var (title, preview, placeholder) = GetCardText(note);
+        int previewTop = text.Top + metadataHeight + 4;
+        if (title.Length > 0)
         {
-            DrawSearchText(args.Graphics, NoteSearch.GetSnippet(note.Title, searchQuery, 110),
-                new Rectangle(text.Left, text.Top, firstRowWidth, line), cardTitle, theme.Ink, singleLine: true);
+            int titleHeight = GetLineHeight(cardTitle, args.Graphics);
+            DrawSearchText(args.Graphics, title,
+                new Rectangle(text.Left, previewTop, text.Width, titleHeight), cardTitle, theme.Ink, singleLine: true);
+            previewTop += titleHeight;
         }
 
-        string preview = note.Content.Length == 0 && NoteImage.ContainsPicture(note.RichText) ? "Image" : note.Content;
-        int previewTop = hasTitle ? text.Top + line + 2 : text.Top;
-        int previewWidth = hasTitle ? text.Width : firstRowWidth;
-        var previewBounds = new Rectangle(text.Left, previewTop, previewWidth, text.Bottom - previewTop);
-        if (!previewRenderer.Draw(args.Graphics, previewBounds, note, searchQuery, Font, theme, paper))
-            DrawSearchText(args.Graphics, NoteSearch.GetSnippet(preview, searchQuery, 220), previewBounds, Font, theme.Ink, singleLine: false);
+        if (preview.Length == 0 || previewTop >= text.Bottom) return;
+        var previewBounds = Rectangle.FromLTRB(text.Left, previewTop, text.Right, text.Bottom);
+        if (placeholder || !previewRenderer.Draw(args.Graphics, previewBounds, note, searchQuery, Font, theme, paper))
+            DrawSearchText(args.Graphics, preview, previewBounds, Font, placeholder ? theme.MutedInk : theme.Ink, singleLine: placeholder);
+    }
+
+    private const int MaxCardLines = 5;
+    private const int CardItemVerticalPadding = 8 + 16 + 4;
+    private const int CardItemHorizontalPadding = 4 + 24;
+
+    private static int GetLineHeight(Font font, Graphics graphics) => (int)Math.Ceiling(font.GetHeight(graphics));
+
+    private static string GetCardTimestamp(DateTimeOffset created, DateTimeOffset now)
+    {
+        TimeSpan age = now - created;
+        return created.ToLocalTime().ToString(age >= TimeSpan.Zero && age < TimeSpan.FromHours(24) ? "HH:mm" : "MMM d");
+    }
+
+    private (string Title, string Preview, bool Placeholder) GetCardText(Note note)
+    {
+        string title = NoteSearch.GetSnippet(note.Title, searchQuery, 110);
+        string preview = NoteSearch.GetSnippet(note.Content, searchQuery, 1200);
+        if (preview.Length == 0 && NoteImage.ContainsPicture(note.RichText)) preview = "Image";
+        bool placeholder = title.Length == 0 && preview.Length == 0;
+        return (title, placeholder ? "Write a note…" : preview, placeholder);
+    }
+
+    private int MeasureCardHeight(Graphics graphics, Note note, int width)
+    {
+        var (title, preview, placeholder) = GetCardText(note);
+        int height = CardItemVerticalPadding + GetLineHeight(cardDate, graphics);
+        int availableLines = MaxCardLines;
+        if (title.Length > 0)
+        {
+            height += GetLineHeight(cardTitle, graphics);
+            availableLines--;
+        }
+
+        if (preview.Length == 0) return height;
+        int lineHeight = GetLineHeight(Font, graphics);
+        int textWidth = Math.Max(1, width - CardItemHorizontalPadding);
+        if (!placeholder)
+        {
+            int richHeight = previewRenderer.MeasureHeight(graphics, note, searchQuery, Font, textWidth, lineHeight, availableLines);
+            if (richHeight > 0) return height + richHeight;
+
+            using var format = new StringFormat(StringFormatFlags.LineLimit) { Trimming = StringTrimming.EllipsisCharacter };
+            graphics.MeasureString(preview, Font, new SizeF(textWidth, lineHeight * availableLines), format, out _, out int lines);
+            availableLines = Math.Clamp(lines, 1, availableLines);
+        }
+        else availableLines = 1;
+
+        return height + lineHeight * availableLines;
+    }
+
+    private void UpdateCardHeights()
+    {
+        if (!noteList.IsHandleCreated || noteList.Items.Count == 0 || measuringCards) return;
+        measuringCards = true;
+        try
+        {
+            int top = noteList.TopIndex;
+            noteList.BeginUpdate();
+            try
+            {
+                using Graphics graphics = noteList.CreateGraphics();
+                int width;
+                do
+                {
+                    width = noteList.ClientSize.Width;
+                    for (int index = 0; index < noteList.Items.Count; index++)
+                        noteList.SetRowHeight(index, MeasureCardHeight(graphics, (Note)noteList.Items[index], width));
+                    // A newly visible native scrollbar can reduce the client width.
+                } while (noteList.ClientSize.Width < width);
+
+                noteList.TopIndex = top;
+            }
+            finally { noteList.EndUpdate(); }
+        }
+        finally { measuringCards = false; }
     }
 
     private void DrawSearchText(Graphics graphics, string text, Rectangle bounds, Font font, Color foreground, bool singleLine)
@@ -494,7 +571,8 @@ internal sealed class NotesForm : ResizableNoteWindow
     {
         int previousTop = resetScroll ? 0 : noteList.TopIndex;
         SetCardHover(-1, pressed: false);
-        var visibleNotes = notes.Where(note => NoteSearch.Matches(note, searchQuery)).ToArray();
+        var visibleNotes = notes.Where(note => NoteSearch.Matches(note, searchQuery))
+            .OrderByDescending(note => note.UpdatedAt).ToArray();
         noteList.BeginUpdate();
         try
         {
@@ -514,6 +592,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         {
             noteList.EndUpdate();
         }
+        UpdateCardHeights();
     }
 
     private void OpenEditor(Note note)
@@ -635,11 +714,20 @@ internal sealed class NotesForm : ResizableNoteWindow
         {
             RefreshList(noteList.SelectedItem as Note);
         }
-        else if (titleChanged && index >= 0)
+        else if (index >= 0)
         {
-            noteList.Items[index] = note;
+            if (index > 0 && ((Note)noteList.Items[index - 1]).UpdatedAt < note.UpdatedAt)
+            {
+                RefreshList(noteList.SelectedItem as Note);
+            }
+            else
+            {
+                if (titleChanged) noteList.Items[index] = note;
+                using Graphics graphics = noteList.CreateGraphics();
+                noteList.SetRowHeight(index, MeasureCardHeight(graphics, note, noteList.ClientSize.Width));
+                noteList.Invalidate();
+            }
         }
-        noteList.Invalidate();
         SetDirty();
     }
 

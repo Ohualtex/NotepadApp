@@ -36,19 +36,24 @@ internal static class NoteImage
             $@"{{\rtf1\ansi{{\pict\pngblip\picw{stored.Width}\pich{stored.Height}\picwgoal{displayWidth}\pichgoal{displayHeight} {data}}}}}");
     }
 
-    public static string FitPreview(string richText, int width, int height)
+    public static string FitPreview(string richText, int width, int height, out int tallestPicture)
     {
+        tallestPicture = 0;
         if (!ContainsPicture(richText)) return richText;
 
-        return Regex.Replace(richText, @"(?<!\\)\\picwgoal([0-9]+)\s*\\pichgoal([0-9]+)", match =>
+        int maxPictureHeight = 0;
+        string preview = Regex.Replace(richText, @"(?<!\\)\\picwgoal([0-9]+)\s*\\pichgoal([0-9]+)", match =>
         {
             if (!int.TryParse(match.Groups[1].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out int sourceWidth) ||
                 !int.TryParse(match.Groups[2].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out int sourceHeight) ||
                 sourceWidth <= 0 || sourceHeight <= 0) return match.Value;
 
             Size fitted = Fit(new Size(sourceWidth, sourceHeight), new Size(width, height));
+            maxPictureHeight = Math.Max(maxPictureHeight, fitted.Height);
             return FormattableString.Invariant($@"\picwgoal{fitted.Width}\pichgoal{fitted.Height}");
         });
+        tallestPicture = maxPictureHeight;
+        return preview;
     }
 
     private static Size Fit(Size image, Size available)
