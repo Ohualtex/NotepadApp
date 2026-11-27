@@ -59,6 +59,7 @@ internal sealed class NotesForm : ResizableNoteWindow
         Size = new Size(420, 570);
         MinimumSize = new Size(320, 360);
         StartPosition = FormStartPosition.CenterScreen;
+        Padding = new Padding(5, 0, 5, 5);
         workspace = BuildWorkspace();
         settings = new NotesSettingsView(ShowNotes, Close, save, reload,
             mode => ChangePreferences(preferences with { Theme = mode }),
@@ -199,30 +200,34 @@ internal sealed class NotesForm : ResizableNoteWindow
 
     private Control BuildWorkspace()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(10) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var heading = new Label { Text = "Notes", Font = listHeading, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(7, 0, 0, 0) };
-        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0, 0, 0, 10) };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
+        var heading = new Label { Text = "Notes", Font = listHeading, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(10, 0, 10, 0) };
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48));
         header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         header.Controls.Add(add, 0, 0);
-        header.Controls.Add(heading, 1, 0);
+        var caption = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        header.Controls.Add(caption, 1, 0);
         header.Controls.Add(settingsButton, 2, 0);
         header.Controls.Add(closeButton, 3, 0);
-        ConfigureCaption(heading);
-        foreach (Button button in new[] { add, settingsButton, closeButton })
+        ConfigureCaption(caption, topResizeGrip: 5);
+        foreach (NoteButton button in new[] { add, settingsButton, closeButton })
         {
-            button.Margin = new Padding(1);
+            button.Margin = Padding.Empty;
+            button.FillCell = true;
         }
         layout.Controls.Add(header, 0, 0);
+        layout.Controls.Add(heading, 0, 1);
 
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 24));
         searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -252,19 +257,22 @@ internal sealed class NotesForm : ResizableNoteWindow
         searchRow.Controls.Add(magnifier, 0, 0);
         searchRow.Controls.Add(searchInput, 1, 0);
         searchRow.Controls.Add(clearSearch, 2, 0);
-        layout.Controls.Add(searchRow, 0, 1);
+        searchRow.Margin = new Padding(10, 0, 10, 10);
+        layout.Controls.Add(searchRow, 0, 2);
 
-        var results = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        var results = new Panel { Dock = DockStyle.Fill, Margin = new Padding(10, 0, 10, 0) };
         results.Controls.Add(noteList);
         results.Controls.Add(noResults);
-        layout.Controls.Add(results, 0, 2);
-        layout.Controls.Add(status, 0, 3);
+        layout.Controls.Add(results, 0, 3);
+        status.Margin = new Padding(10, 0, 10, 10);
+        layout.Controls.Add(status, 0, 4);
         return layout;
     }
 
     private void ShowSettings()
     {
         workspace.Hide();
+        Padding = new Padding(5);
         settings.Show();
         settings.BringToFront();
         settings.FocusBack();
@@ -273,6 +281,7 @@ internal sealed class NotesForm : ResizableNoteWindow
     private void ShowNotes()
     {
         settings.Hide();
+        Padding = new Padding(5, 0, 5, 5);
         workspace.Show();
         settingsButton.Focus();
     }

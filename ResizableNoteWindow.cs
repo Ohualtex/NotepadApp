@@ -43,8 +43,7 @@ internal class ResizableNoteWindow : Form
         resizeEdge = EdgeAt(args.Location);
         if (resizeEdge == ResizeEdge.None) return;
 
-        resizeOrigin = PointToScreen(args.Location);
-        originalBounds = Bounds;
+        BeginResize(resizeEdge, PointToScreen(args.Location));
         Cursor = ResizeCursor(resizeEdge);
         Capture = true;
     }
@@ -101,6 +100,13 @@ internal class ResizableNoteWindow : Form
         return horizontal | vertical;
     }
 
+    private void BeginResize(ResizeEdge edge, Point pointer)
+    {
+        resizeEdge = edge;
+        resizeOrigin = pointer;
+        originalBounds = Bounds;
+    }
+
     private Rectangle CalculateResizeBounds(Point pointer)
     {
         int dx = pointer.X - resizeOrigin.X;
@@ -140,7 +146,7 @@ internal class ResizableNoteWindow : Form
         Bottom = 8
     }
 
-    protected void ConfigureCaption(Control control, Action? clickCaption = null)
+    protected void ConfigureCaption(Control control, Action? clickCaption = null, int topResizeGrip = 0)
     {
         Point pointerStart = Point.Empty;
         Point windowStart = Point.Empty;
@@ -151,6 +157,13 @@ internal class ResizableNoteWindow : Form
         {
             if (args.Button != MouseButtons.Left) return;
             pointerStart = Cursor.Position;
+            if (args.Y < topResizeGrip)
+            {
+                BeginResize(ResizeEdge.Top, pointerStart);
+                control.Capture = true;
+                return;
+            }
+
             windowStart = Location;
             pressed = true;
             dragging = false;
@@ -159,6 +172,17 @@ internal class ResizableNoteWindow : Form
 
         control.MouseMove += (_, args) =>
         {
+            if (topResizeGrip > 0)
+            {
+                bool resizing = resizeEdge == ResizeEdge.Top && control.Capture;
+                control.Cursor = resizing || args.Y < topResizeGrip ? Cursors.SizeNS : Cursors.Default;
+                if (resizing)
+                {
+                    Bounds = CalculateResizeBounds(Cursor.Position);
+                    return;
+                }
+            }
+
             if (!control.Capture || (args.Button & MouseButtons.Left) == 0) return;
             Point pointer = Cursor.Position;
             int dx = pointer.X - pointerStart.X;
@@ -172,10 +196,27 @@ internal class ResizableNoteWindow : Form
 
         control.MouseUp += (_, args) =>
         {
-            if (args.Button != MouseButtons.Left || !pressed) return;
+            if (args.Button != MouseButtons.Left) return;
+            if (topResizeGrip > 0 && resizeEdge == ResizeEdge.Top && control.Capture)
+            {
+                resizeEdge = ResizeEdge.None;
+                control.Capture = false;
+                return;
+            }
+
+            if (!pressed) return;
             pressed = false;
             control.Capture = false;
             if (!dragging) clickCaption?.Invoke();
         };
+
+        if (topResizeGrip > 0)
+        {
+            control.MouseCaptureChanged += (_, _) =>
+            {
+                if (!control.Capture && resizeEdge == ResizeEdge.Top)
+                    resizeEdge = ResizeEdge.None;
+            };
+        }
     }
 }

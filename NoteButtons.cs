@@ -16,6 +16,9 @@ internal sealed class NoteButton : Button
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Action<Graphics, Color>? PaintIcon { get; set; }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    internal bool FillCell { get; set; }
+
     internal void SetCenteredIcon(Action<Graphics, Color> draw)
     {
         PaintIcon = (graphics, ink) =>
@@ -36,7 +39,7 @@ internal sealed class NoteButton : Button
         };
     }
 
-    protected override void OnPaint(PaintEventArgs args) => surface.Paint(args.Graphics, false, ShowFocusCues, PaintIcon);
+    protected override void OnPaint(PaintEventArgs args) => surface.Paint(args.Graphics, false, ShowFocusCues, PaintIcon, FillCell);
 }
 
 internal sealed class NoteToggleButton : CheckBox
@@ -88,13 +91,13 @@ internal sealed class NoteButtonSurface
         button.LostFocus += (_, _) => SetPressed(false);
     }
 
-    public void Paint(Graphics graphics, bool selected, bool showFocus, Action<Graphics, Color>? paintIcon)
+    public void Paint(Graphics graphics, bool selected, bool showFocus, Action<Graphics, Color>? paintIcon, bool fillCell = false)
     {
         Color fill = button.BackColor;
         if (button.Enabled)
         {
             if (pressed && (hovered || button.Focused)) fill = Fallback(button.FlatAppearance.MouseDownBackColor, fill);
-            else if (hovered) fill = Fallback(button.FlatAppearance.MouseOverBackColor, fill);
+            else if (hovered || (fillCell && button.Focused && showFocus)) fill = Fallback(button.FlatAppearance.MouseOverBackColor, fill);
             else if (selected) fill = Fallback(button.FlatAppearance.CheckedBackColor, fill);
         }
 
@@ -103,7 +106,9 @@ internal sealed class NoteButtonSurface
         var rectangle = new Rectangle(0, 0, button.Width - 1, button.Height - 1);
         if (rectangle.Width <= 0 || rectangle.Height <= 0) return;
         using var background = new SolidBrush(fill);
-        if (rectangle.Width >= 10 && rectangle.Height >= 10)
+        if (fillCell)
+            graphics.FillRectangle(background, button.ClientRectangle);
+        else if (rectangle.Width >= 10 && rectangle.Height >= 10)
         {
             using var shape = new GraphicsPath();
             const int diameter = 10;
@@ -130,7 +135,7 @@ internal sealed class NoteButtonSurface
             TextRenderer.DrawText(graphics, button.Text, button.Font, bounds, ink, flags);
         }
 
-        if (button.Focused && showFocus) DrawFocusMarker(graphics, button.ClientSize, ink);
+        if (!fillCell && button.Focused && showFocus) DrawFocusMarker(graphics, button.ClientSize, ink);
     }
 
     public static void DrawFocusMarker(Graphics graphics, Size size, Color ink)
