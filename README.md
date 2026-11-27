@@ -22,8 +22,8 @@ The app uses C#, Windows Forms, and the .NET standard library.
 
 ## Use the app
 
-- Select **+** in the list or a post-it to create a note. The new note opens ready to type. To add an optional title, click the top bar or press **F2**.
-- Drag a post-it by its top bar and resize it from its edges. Each note remembers its own position and size. The top bar and formatting toolbar appear when the note has focus.
+- Select **+** in the list or a post-it to create a note. The new note opens ready to type.
+- Drag a post-it by its top bar and resize it from its edges. Each note remembers its own position and size. The top bar slides into view when the note gains focus and slides away when it loses focus. The formatting toolbar appears on the active note.
 - Select a card to open its note or bring it forward. Hover over a card and select **⋯** to open or delete the note from the list.
 - Cards are sorted by last edit and show up to five lines of content. The top-right corner shows the creation time for notes less than 24 hours old and the month and day for older notes.
 - Scroll through the list with the mouse wheel or drag the thin scrollbar at the right edge.
