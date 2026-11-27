@@ -19,25 +19,7 @@ internal sealed class NoteButton : Button
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal bool FillCell { get; set; }
 
-    internal void SetCenteredIcon(Action<Graphics, Color> draw)
-    {
-        PaintIcon = (graphics, ink) =>
-        {
-            GraphicsState state = graphics.Save();
-            try
-            {
-                float scale = DeviceDpi / 96f;
-                graphics.TranslateTransform((ClientSize.Width - 1) / 2f, (ClientSize.Height - 1) / 2f);
-                graphics.ScaleTransform(scale, scale);
-                graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                draw(graphics, ink);
-            }
-            finally
-            {
-                graphics.Restore(state);
-            }
-        };
-    }
+    internal void SetCenteredIcon(Action<Graphics, Color> draw) => PaintIcon = NoteButtonSurface.CenterIcon(this, draw);
 
     protected override void OnPaint(PaintEventArgs args) => surface.Paint(args.Graphics, false, ShowFocusCues, PaintIcon, FillCell);
 }
@@ -55,7 +37,12 @@ internal sealed class NoteToggleButton : CheckBox
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Action<Graphics, Color>? PaintIcon { get; set; }
 
-    protected override void OnPaint(PaintEventArgs args) => surface.Paint(args.Graphics, Checked, ShowFocusCues, PaintIcon);
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    internal bool FillCell { get; set; }
+
+    internal void SetCenteredIcon(Action<Graphics, Color> draw) => PaintIcon = NoteButtonSurface.CenterIcon(this, draw);
+
+    protected override void OnPaint(PaintEventArgs args) => surface.Paint(args.Graphics, Checked, ShowFocusCues, PaintIcon, FillCell);
 }
 
 internal sealed class NoteRadioButton : RadioButton
@@ -90,6 +77,23 @@ internal sealed class NoteButtonSurface
         button.GotFocus += (_, _) => button.Invalidate();
         button.LostFocus += (_, _) => SetPressed(false);
     }
+
+    internal static Action<Graphics, Color> CenterIcon(Control button, Action<Graphics, Color> draw) => (graphics, ink) =>
+    {
+        GraphicsState state = graphics.Save();
+        try
+        {
+            float scale = button.DeviceDpi / 96f;
+            graphics.TranslateTransform((button.ClientSize.Width - 1) / 2f, (button.ClientSize.Height - 1) / 2f);
+            graphics.ScaleTransform(scale, scale);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            draw(graphics, ink);
+        }
+        finally
+        {
+            graphics.Restore(state);
+        }
+    };
 
     public void Paint(Graphics graphics, bool selected, bool showFocus, Action<Graphics, Color>? paintIcon, bool fillCell = false)
     {

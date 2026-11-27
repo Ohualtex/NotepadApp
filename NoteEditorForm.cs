@@ -36,7 +36,9 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private readonly Dictionary<FontStyle, CheckBox> styleButtons = [];
     private readonly NoteToggleButton bullets = CreateFormatButton("", "Bulleted list");
     private readonly NoteButton insertImage = new() { AccessibleName = "Insert image" };
-    private readonly FlowLayoutPanel formatTools = new() { Dock = DockStyle.Fill, AutoSize = true };
+    private const int FormatToolWidth = 40;
+    private const int FormatToolbarHeight = 38;
+    private readonly FlowLayoutPanel formatTools = new() { Dock = DockStyle.Fill, Margin = Padding.Empty, WrapContents = false };
 
     public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string?> edit, Func<bool> saveNotes,
         Action<NoteEditorForm, Note> deleteNote, Action<NoteEditorForm, Note> exportNote, Action<Note, string> changeAccent,
@@ -241,18 +243,19 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         headerViewport.BackColor = paper;
         header.BackColor = chrome;
         formatTools.BackColor = chromeVisible ? chrome : paper;
+        Color contrast = chrome.GetBrightness() < 0.5f ? Color.White : Color.Black;
+        Color hover = NoteButtonSurface.Blend(chrome, contrast, 10);
+        Color pressed = NoteButtonSurface.Blend(chrome, contrast, 17);
+        Color selected = NoteButtonSurface.Blend(chrome, contrast, 24);
         foreach (ButtonBase button in formatTools.Controls)
         {
             button.BackColor = chrome;
             button.ForeColor = theme.Ink;
-            button.FlatAppearance.MouseOverBackColor = theme.Hover;
-            button.FlatAppearance.MouseDownBackColor = theme.Pressed;
-            button.FlatAppearance.CheckedBackColor = theme.Control;
+            button.FlatAppearance.MouseOverBackColor = hover;
+            button.FlatAppearance.MouseDownBackColor = pressed;
+            button.FlatAppearance.CheckedBackColor = selected;
         }
 
-        Color contrast = chrome.GetBrightness() < 0.5f ? Color.White : Color.Black;
-        Color hover = NoteButtonSurface.Blend(chrome, contrast, 10);
-        Color pressed = NoteButtonSurface.Blend(chrome, contrast, 17);
         foreach (NoteButton button in new[] { newNote, options, close })
         {
             button.BackColor = chrome;
@@ -339,47 +342,47 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             UpdateFormatState();
         };
         formatTools.Controls.Add(bullets);
-        foreach (CheckBox button in formatTools.Controls)
+        foreach (NoteToggleButton button in formatTools.Controls)
         {
-            NotesForm.StyleButton(button);
-            button.AutoSize = false;
-            button.Size = new Size(36, 30);
-            button.Padding = Padding.Empty;
-            formatToolTip.SetToolTip(button, button.AccessibleName);
+            ConfigureToolCell(button);
+            button.FillCell = true;
         }
 
-        bullets.PaintIcon = (graphics, ink) =>
+        bullets.SetCenteredIcon((graphics, ink) =>
         {
             using var brush = new SolidBrush(ink);
-            using var pen = new Pen(ink);
-            int x = bullets.Width / 2 - 8;
-            int y = bullets.Height / 2 - 5;
-            for (int row = 0; row < 3; row++)
+            using var pen = new Pen(ink, 1.2f);
+            for (int y = -5; y <= 5; y += 5)
             {
-                graphics.FillEllipse(brush, x, y + row * 5, 2, 2);
-                graphics.DrawLine(pen, x + 5, y + row * 5 + 1, x + 16, y + row * 5 + 1);
+                graphics.FillEllipse(brush, -8, y - 1, 2, 2);
+                graphics.DrawLine(pen, -3, y, 8, y);
             }
-        };
+        });
 
-        NotesForm.StyleButton(insertImage);
-        insertImage.Size = new Size(36, 30);
-        insertImage.Padding = Padding.Empty;
-        insertImage.PaintIcon = (graphics, ink) =>
+        ConfigureToolCell(insertImage);
+        insertImage.FillCell = true;
+        insertImage.SetCenteredIcon((graphics, ink) =>
         {
-            using var pen = new Pen(ink);
-            int x = insertImage.Width / 2 - 8;
-            int y = insertImage.Height / 2 - 6;
-            graphics.DrawRectangle(pen, x, y, 16, 12);
-            graphics.DrawEllipse(pen, x + 10, y + 2, 2, 2);
+            using var pen = new Pen(ink, 1.2f);
+            graphics.DrawRectangle(pen, -8, -6, 16, 12);
+            graphics.DrawEllipse(pen, 2, -4, 2, 2);
             graphics.DrawLines(pen,
             [
-                new Point(x + 1, y + 10), new Point(x + 5, y + 5), new Point(x + 9, y + 9),
-                new Point(x + 12, y + 6), new Point(x + 15, y + 10)
+                new Point(-7, 4), new Point(-3, -1), new Point(1, 3), new Point(4, 0), new Point(7, 4)
             ]);
-        };
-        formatToolTip.SetToolTip(insertImage, "Insert image");
+        });
         formatTools.Controls.Add(insertImage);
         UpdateFormatState();
+    }
+
+    private void ConfigureToolCell(ButtonBase button)
+    {
+        NotesForm.StyleButton(button);
+        button.AutoSize = false;
+        button.Size = new Size(FormatToolWidth, FormatToolbarHeight);
+        button.Margin = Padding.Empty;
+        button.Padding = Padding.Empty;
+        formatToolTip.SetToolTip(button, button.AccessibleName);
     }
 
     private void UpdateFormatState()
@@ -398,7 +401,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, HeaderHeight - TopResizeGrip));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, FormatToolbarHeight));
 
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, HeaderHeight));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -422,8 +425,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             button.FillCell = true;
         }
 
-        formatTools.Margin = Padding.Empty;
-        formatTools.WrapContents = false;
 
         content.Margin = Padding.Empty;
         writingArea.Controls.Add(content);
