@@ -775,10 +775,9 @@ internal sealed class NotesForm : ResizableNoteWindow
         OpenEditor(note);
     }
 
-    private void EditNote(Note note, string title, string content, string? richText)
+    private void EditNote(Note note, string content, string? richText)
     {
-        if (note.Title == title && note.Content == content && note.RichText == richText) return;
-        note.Title = title;
+        if (note.Content == content && note.RichText == richText) return;
         note.Content = content;
         note.RichText = richText;
         DateTimeOffset now = DateTimeOffset.UtcNow;

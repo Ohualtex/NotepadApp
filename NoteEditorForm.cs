@@ -4,13 +4,6 @@ namespace NotepadApp;
 
 internal sealed class NoteEditorForm : ResizableNoteWindow
 {
-    private readonly TextBox title = new()
-    {
-        Dock = DockStyle.Fill,
-        AccessibleName = "Note title",
-        BorderStyle = BorderStyle.None,
-        Visible = false
-    };
     private readonly RichTextBox content = new()
     {
         Dock = DockStyle.Fill,
@@ -25,7 +18,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private bool chromeVisible;
     private Color paper;
     private Color chrome;
-    private readonly Label titleCaption = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty };
     private const int HeaderHeight = 40;
     private const int TopResizeGrip = 5;
     private const int HeaderStep = 5;
@@ -46,14 +38,13 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
     private readonly NoteButton insertImage = new() { AccessibleName = "Insert image" };
     private readonly FlowLayoutPanel formatTools = new() { Dock = DockStyle.Fill, AutoSize = true };
 
-    public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string, string?> edit, Func<bool> saveNotes,
+    public NoteEditorForm(Note note, NotesTheme theme, Action<Note, string, string?> edit, Func<bool> saveNotes,
         Action<NoteEditorForm, Note> deleteNote, Action<NoteEditorForm, Note> exportNote, Action<Note, string> changeAccent,
         Action addNote, Action showNotes)
     {
         this.note = note;
         this.theme = theme;
         Text = note.DisplayTitle;
-        titleCaption.Text = note.Title;
         ClientSize = new Size(390, 350);
         MinimumSize = new Size(305, 240);
         StartPosition = note.WindowPlacement is { Width: > 0, Height: > 0 }
@@ -62,7 +53,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         Load += (_, _) => RestoreWindowPlacement(note.WindowPlacement);
         Font = new Font("Segoe UI", 10);
 
-        title.Text = note.Title;
         drawer = new NoteOptionsPanel(
             accent =>
             {
@@ -108,21 +98,12 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         Shown += (_, _) => content.Focus();
         Activated += (_, _) => SetChromeVisible(true);
         Deactivate += (_, _) => SetChromeVisible(false);
-        ConfigureCaption(titleCaption, BeginTitleEdit);
         contentHint.Click += (_, _) => content.Focus();
-        title.LostFocus += (_, _) => EndTitleEdit();
-        title.KeyDown += (_, args) =>
-        {
-            if (args.KeyCode != Keys.Enter && args.KeyCode != Keys.Escape) return;
-            args.SuppressKeyPress = true;
-            content.Focus();
-        };
 
         void UpdateNote(string plainText, string? richText)
         {
-            edit(note, title.Text, plainText, richText);
+            edit(note, plainText, richText);
             Text = note.DisplayTitle;
-            titleCaption.Text = note.Title;
             drawer.SetDates(note);
         }
 
@@ -134,7 +115,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             UpdateNote(plainText, plainText.Length > 0 || hasImage ? richText : null);
         }
 
-        title.TextChanged += (_, _) => UpdateNote(note.Content, note.RichText);
         content.TextChanged += (_, _) =>
         {
             UpdateContentHint();
@@ -168,12 +148,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             return true;
         }
 
-        if (keyData == Keys.F2 && chromeVisible && title.Enabled)
-        {
-            BeginTitleEdit();
-            return true;
-        }
-
         return base.ProcessCmdKey(ref message, keyData);
     }
 
@@ -185,7 +159,6 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
             return;
         }
 
-        EndTitleEdit();
         drawer.FitTo(writingArea.ClientSize);
         drawer.Show();
         drawer.BringToFront();
@@ -199,31 +172,11 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         if (restoreFocus) content.Focus();
     }
 
-    private void BeginTitleEdit()
-    {
-        if (!title.Enabled) return;
-        CloseDrawer(restoreFocus: false);
-        titleCaption.Hide();
-        title.Show();
-        title.Focus();
-        title.SelectAll();
-    }
-
-    private void EndTitleEdit()
-    {
-        title.Hide();
-        titleCaption.Show();
-    }
-
     private void SetChromeVisible(bool visible)
     {
         chromeVisible = visible;
         formatTools.Visible = visible;
-        if (!visible)
-        {
-            CloseDrawer(restoreFocus: false);
-            EndTitleEdit();
-        }
+        if (!visible) CloseDrawer(restoreFocus: false);
         if (visible) headerViewport.Show();
         if (visibleHeaderHeight != (visible ? HeaderHeight : 0)) headerTimer.Start();
         UpdateContentHint();
@@ -259,9 +212,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         paper = theme.NotePaper(accent, selected: false);
         chrome = theme.NotePaper(accent, selected: true);
         BackColor = content.BackColor = paper;
-        title.ForeColor = titleCaption.ForeColor = theme.Ink;
         status.ForeColor = contentHint.ForeColor = theme.MutedInk;
-        title.BackColor = chrome;
 
         if (inkChanged)
         {
@@ -454,15 +405,13 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, HeaderHeight));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, HeaderHeight));
         header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var titleArea = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 8, 4, 0), Margin = Padding.Empty };
-        titleArea.Controls.Add(titleCaption);
-        titleArea.Controls.Add(title);
-        ConfigureCaption(titleArea, BeginTitleEdit, topResizeGrip: TopResizeGrip);
+        var caption = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        ConfigureCaption(caption, topResizeGrip: TopResizeGrip);
         newNote.SetCenteredIcon(NoteButtonIcons.Add);
         options.SetCenteredIcon(NoteButtonIcons.More);
         close.SetCenteredIcon(NoteButtonIcons.Close);
         header.Controls.Add(newNote, 0, 0);
-        header.Controls.Add(titleArea, 1, 0);
+        header.Controls.Add(caption, 1, 0);
         header.Controls.Add(options, 2, 0);
         header.Controls.Add(close, 3, 0);
         foreach (NoteButton button in new[] { newNote, options, close })
@@ -489,7 +438,7 @@ internal sealed class NoteEditorForm : ResizableNoteWindow
 
     public void SetAvailability(bool storageReady, bool dirty)
     {
-        title.Enabled = content.Enabled = newNote.Enabled = formatTools.Enabled = storageReady;
+        content.Enabled = newNote.Enabled = formatTools.Enabled = storageReady;
         drawer.SetAvailability(storageReady, dirty);
     }
 
