@@ -25,6 +25,7 @@ The app uses C#, Windows Forms, and the .NET standard library.
 - Select **+** in the list or a post-it to create a note. The new note opens ready to type. To add an optional title, click the top bar or press **F2**.
 - Drag a post-it by its top bar and resize it from its edges. Each note remembers its own position and size. The top bar and formatting toolbar appear when the note has focus.
 - Select a card to open its note or bring it forward. Closing the list leaves open notes on your desktop. Use **⋯ → Notes list** from a post-it to bring back the list.
+- Drag the notes list by the empty space in the top bar. The **Notes** heading sits below the bar, above the search box.
 - Search by title or text with **Ctrl+F**. Matches are highlighted in the cards, including rich-text previews. Press **Esc** while the search box has focus to clear it.
 - Use the formatting toolbar for bold, italic, underline, strikethrough, and bullets. Use the image icon to insert a picture at the cursor.
 - Open **⋯** for note colors, **Save all**, **Export .txt**, and **Delete note**. The export contains a title line and the note's plain text in UTF-8.
