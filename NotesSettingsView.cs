@@ -10,8 +10,8 @@ internal sealed class NotesSettingsView : UserControl
     private readonly Button save;
     private readonly Button reload;
     private readonly Button export;
-    private readonly TableLayoutPanel themeOptions = new() { AutoSize = true, ColumnCount = 3, RowCount = 1, Dock = DockStyle.Top };
-    private readonly Dictionary<ThemePreference, RadioButton> themeButtons = [];
+    private readonly TableLayoutPanel themeOptions = new() { AutoSize = true, ColumnCount = 1, Dock = DockStyle.Top, Margin = Padding.Empty };
+    private readonly Dictionary<ThemePreference, NoteRadioButton> themeButtons = [];
     private readonly PreferenceToggle confirmDelete = new()
     {
         AccessibleName = "Confirm before deleting",
@@ -44,25 +44,25 @@ internal sealed class NotesSettingsView : UserControl
         header.Controls.Add(heading, 1, 0);
         header.Controls.Add(close, 2, 0);
         layout.Controls.Add(new Label { Text = "Theme", AutoSize = true, Margin = new Padding(3, 0, 3, 6) }, 0, 0);
-        foreach (ThemePreference mode in Enum.GetValues<ThemePreference>())
+        themeOptions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        var themeModes = Enum.GetValues<ThemePreference>();
+        themeOptions.RowCount = themeModes.Length;
+        foreach (ThemePreference mode in themeModes)
         {
             int index = themeButtons.Count;
-            themeOptions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 3));
+            themeOptions.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             var button = new NoteRadioButton
             {
-                Text = mode.ToString(),
-                Appearance = Appearance.Button,
-                TextAlign = ContentAlignment.MiddleCenter,
+                Text = mode == ThemePreference.System ? "Use Windows theme" : mode.ToString(),
                 Dock = DockStyle.Fill,
-                AutoSize = true,
-                Margin = new Padding(1)
+                Margin = Padding.Empty
             };
             button.CheckedChanged += (_, _) =>
             {
                 if (!updating && button.Checked) changeTheme(mode);
             };
             themeButtons.Add(mode, button);
-            themeOptions.Controls.Add(button, index, 0);
+            themeOptions.Controls.Add(button, 0, index);
         }
         layout.Controls.Add(themeOptions, 0, 1);
         layout.Controls.Add(new Label { Text = "Notes", AutoSize = true, Margin = new Padding(3, 22, 3, 4) }, 0, 2);
@@ -114,7 +114,7 @@ internal sealed class NotesSettingsView : UserControl
             foreach (var (mode, button) in themeButtons)
             {
                 button.Checked = mode == preferences.Theme;
-                StyleAction(button, theme, button.Checked);
+                button.ApplyTheme(theme);
             }
 
             confirmDelete.Checked = preferences.ConfirmBeforeDeleting;
@@ -132,14 +132,13 @@ internal sealed class NotesSettingsView : UserControl
         notice.Visible = message is not null;
     }
 
-    private static void StyleAction(ButtonBase button, NotesTheme theme, bool selected = false)
+    private static void StyleAction(ButtonBase button, NotesTheme theme)
     {
         NotesForm.StyleButton(button);
-        button.BackColor = selected ? theme.Primary : theme.Control;
-        button.ForeColor = selected ? NotesTheme.PrimaryInk : theme.Ink;
-        button.FlatAppearance.CheckedBackColor = theme.Primary;
-        button.FlatAppearance.MouseOverBackColor = selected ? NoteButtonSurface.Blend(theme.Primary, Color.White, 13) : theme.Hover;
-        button.FlatAppearance.MouseDownBackColor = selected ? NoteButtonSurface.Blend(theme.Primary, Color.Black, 12) : theme.Pressed;
+        button.BackColor = theme.Control;
+        button.ForeColor = theme.Ink;
+        button.FlatAppearance.MouseOverBackColor = theme.Hover;
+        button.FlatAppearance.MouseDownBackColor = theme.Pressed;
     }
 
     private sealed class PreferenceToggle : CheckBox

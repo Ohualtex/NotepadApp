@@ -48,6 +48,7 @@ internal sealed class NoteToggleButton : CheckBox
 internal sealed class NoteRadioButton : RadioButton
 {
     private readonly NoteButtonSurface surface;
+    private Color indicatorColor;
 
     public NoteRadioButton()
     {
@@ -55,7 +56,43 @@ internal sealed class NoteRadioButton : RadioButton
         surface = new NoteButtonSurface(this);
     }
 
-    protected override void OnPaint(PaintEventArgs args) => surface.Paint(args.Graphics, Checked, ShowFocusCues, null);
+    internal void ApplyTheme(NotesTheme theme)
+    {
+        FlatStyle = FlatStyle.Flat;
+        BackColor = theme.Surface;
+        ForeColor = theme.Ink;
+        FlatAppearance.MouseOverBackColor = theme.HeaderHover;
+        FlatAppearance.MouseDownBackColor = theme.HeaderPressed;
+        indicatorColor = theme.Surface.GetBrightness() < 0.5f
+            ? theme.Primary
+            : NoteButtonSurface.Blend(theme.Primary, NotesTheme.PrimaryInk, 55);
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs args) =>
+        surface.Paint(args.Graphics, Checked, ShowFocusCues, DrawChoice, fillCell: true);
+
+    private void DrawChoice(Graphics graphics, Color ink)
+    {
+        float scale = DeviceDpi / 96f;
+        float diameter = 16 * scale;
+        var ring = new RectangleF(8 * scale, (Height - diameter) / 2f, diameter, diameter);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        Color ringInk = Checked && Enabled ? indicatorColor : ink;
+        using var outline = new Pen(ringInk, 1.3f * scale);
+        graphics.DrawEllipse(outline, ring);
+        if (Checked)
+        {
+            using var dot = new SolidBrush(ringInk);
+            graphics.FillEllipse(dot, RectangleF.Inflate(ring, -4 * scale, -4 * scale));
+        }
+
+        int textLeft = (int)Math.Ceiling(ring.Right + 10 * scale);
+        var bounds = Rectangle.FromLTRB(textLeft, 0, Math.Max(textLeft, Width - 8), Height);
+        TextRenderer.DrawText(graphics, Text, Font, bounds, ink,
+            TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis
+            | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+    }
 }
 
 internal sealed class NoteButtonSurface
